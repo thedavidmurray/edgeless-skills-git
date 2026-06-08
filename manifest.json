@@ -1,84 +1,22 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-06-08T07:09:44.182512+00:00",
+  "generated_at": "2026-06-08T07:10:00.430880+00:00",
   "domains": {
-    "creative": [
-      ".templates",
-      "assets",
-      "references",
-      "scripts"
-    ],
-    "devops": [
-      ".templates",
-      "assets",
-      "references",
-      "scripts"
-    ],
     "research": [
-      ".templates",
       "academic-research",
-      "assets",
-      "references",
-      "research",
-      "scripts"
-    ],
-    "product": [
-      ".templates",
-      "assets",
-      "references",
-      "scripts"
-    ],
-    "tooling": [
-      ".templates",
-      "assets",
-      "references",
-      "scripts"
-    ],
-    "observability": [
-      ".templates",
-      "assets",
-      "references",
-      "scripts"
-    ],
-    "ingestion": [
-      ".templates",
-      "assets",
-      "references",
-      "scripts"
+      "research"
     ],
     "knowledge": [
-      ".templates",
-      "assets",
-      "references",
-      "scripts",
       "vault-knowledge-ops"
     ],
     "security": [
-      ".templates",
-      "assets",
-      "references",
-      "scripts",
       "security-best-practices",
       "security-ownership-map",
       "security-threat-model"
     ],
-    "system": [
-      ".templates",
-      "assets",
-      "references",
-      "scripts"
-    ],
-    "external": [
-      ".templates",
-      "assets",
-      "references",
-      "scripts"
-    ],
     "unclassified": [
-      ".templates",
       "academic-paper",
       "academic-review",
-      "assets",
       "baoyu-comic-pipeline",
       "claude-projects-agents-bridge",
       "claude-projects-backlog-bridge",
@@ -116,11 +54,9 @@
       "playwright-interactive",
       "proof-of-completion",
       "recall",
-      "references",
       "review",
       "scrapping",
       "screenshot",
-      "scripts",
       "sentry",
       "signal-extraction-layer",
       "speech",
@@ -132,38 +68,6 @@
     ]
   },
   "skills": {
-    ".templates": {
-      "domain": "unclassified",
-      "path": "unclassified/.templates",
-      "checksum": "e3b0c44298fc1c14",
-      "has_scripts": false,
-      "has_references": false,
-      "has_assets": false
-    },
-    "assets": {
-      "domain": "unclassified",
-      "path": "unclassified/assets",
-      "checksum": "e3b0c44298fc1c14",
-      "has_scripts": false,
-      "has_references": false,
-      "has_assets": false
-    },
-    "references": {
-      "domain": "unclassified",
-      "path": "unclassified/references",
-      "checksum": "e3b0c44298fc1c14",
-      "has_scripts": false,
-      "has_references": false,
-      "has_assets": false
-    },
-    "scripts": {
-      "domain": "unclassified",
-      "path": "unclassified/scripts",
-      "checksum": "e3b0c44298fc1c14",
-      "has_scripts": false,
-      "has_references": false,
-      "has_assets": false
-    },
     "academic-research": {
       "domain": "research",
       "path": "research/academic-research",
