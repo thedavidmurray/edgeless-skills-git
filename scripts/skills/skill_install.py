@@ -155,14 +155,17 @@ def clone_skill(source: str, skill_name: str, dest: Path) -> bool:
 def install_from_path(source_path: Path, skill_name: str, dest: Path) -> bool:
     """Install from a local path."""
     src = source_path / skill_name
-    if not src.exists():
+    # Only accept src if it looks like a skill directory (has SKILL.md or skill.md)
+    if src.exists() and not any((src / c).exists() for c in ("SKILL.md", "skill.md")):
+        src = None  # type: ignore[assignment]
+    if not src or not src.exists():
         # Try subdirectories
         for domain in ["creative", "devops", "research", "product", "tooling", "observability", "ingestion", "knowledge", "security", "system", "external", "unclassified"]:
             candidate = source_path / domain / skill_name
             if candidate.exists():
                 src = candidate
                 break
-    if not src.exists():
+    if not src or not src.exists():
         print(f"Error: skill '{skill_name}' not found in {source_path}")
         return False
     if dest.exists():
