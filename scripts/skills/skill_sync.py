@@ -54,7 +54,7 @@ DOMAINS = [
 ]
 
 # Files/dirs to exclude from sync
-EXCLUDE = {".git", "__pycache__", ".DS_Store", ".archive", ".disabled", ".hub", ".curator_backups", ".usage.json", ".usage.json.lock", ".bundled_manifest", ".curator_state", ".system"}
+EXCLUDE = {".git", "__pycache__", ".DS_Store", ".archive", ".disabled", ".hub", ".curator_backups", ".usage.json", ".usage.json.lock", ".bundled_manifest", ".curator_state", ".system", "*.bak"}
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -79,6 +79,8 @@ def sha256_dir(path: Path) -> str:
     h = hashlib.sha256()
     for fp in sorted(path.rglob("*")):
         if fp.is_file() and not any(part.startswith(".") for part in fp.relative_to(path).parts):
+            if fp.suffix == ".bak":
+                continue
             h.update(fp.relative_to(path).as_posix().encode())
             h.update(fp.read_bytes())
     return h.hexdigest()[:16]
