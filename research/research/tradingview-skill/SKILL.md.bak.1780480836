@@ -1,0 +1,138 @@
+---
+name: tradingview-mcp
+description: >
+  TradingView market data and Pine Script automation
+  Progressive disclosure wrapper for tradingview MCP server.
+  Loads 78 tools on-demand instead of at session start.
+version: 1.0.0
+author: MCP-to-Skill Proxy (auto-generated)
+license: MIT
+metadata:
+  tags: [mcp, tradingview, progressive-disclosure]
+  tier: task-specific
+  domain: research
+  lazy_load: true
+  mcp_source: tradingview
+prerequisites:
+  commands: [python3, uvx]
+  env_vars: []
+---
+
+# Tradingview MCP Tools
+
+TradingView market data and Pine Script automation
+
+## When to Use
+
+- Accessing tradingview tools without MCP context overhead
+- Lazy-loading tool schemas only when needed
+- Reducing session startup by ~15600+ tokens
+
+## Tools Available
+
+- `tv_health_check`: Check CDP connection to TradingView and return current chart state
+- `tv_discover`: Report which known TradingView API paths are available and their methods
+- `tv_ui_state`: Get current UI state: which panels are open, what buttons are visible/enabled/disabled
+- `tv_launch`: Launch TradingView Desktop with Chrome DevTools Protocol (remote debugging) enabled. Auto-detects install location on Mac, Windows, and Linux.
+- `chart_get_state`: Get current chart state (symbol, timeframe, chart type, indicators)
+- `chart_set_symbol`: Change the chart symbol
+- `chart_set_timeframe`: Change the chart timeframe/resolution
+- `chart_set_type`: Change chart type
+- `chart_manage_indicator`: Add or remove an indicator/study on the chart
+- `chart_get_visible_range`: Get the visible date range (unix timestamps) and bars range on the chart
+- `chart_set_visible_range`: Zoom the chart to a specific date range (unix timestamps)
+- `chart_scroll_to_date`: Jump the chart view to center on a specific date
+- `symbol_info`: Get detailed metadata about the current symbol (name, exchange, type, description)
+- `symbol_search`: Search for symbols by name or keyword
+- `pine_get_source`: Get current Pine Script source code from the editor
+- `pine_set_source`: Set Pine Script source code in the editor
+- `pine_compile`: Compile / add the current Pine Script to the chart
+- `pine_get_errors`: Get Pine Script compilation errors from Monaco markers
+- `pine_save`: Save the current Pine Script (Ctrl+S)
+- `pine_get_console`: Read Pine Script console/log output (compile messages, log.info(), errors)
+- `pine_smart_compile`: Intelligent compile: detects button, compiles, checks errors, reports study changes
+- `pine_new`: Create a new blank Pine Script
+- `pine_open`: Open a saved Pine Script by name
+- `pine_list_scripts`: List saved Pine Scripts
+- `pine_analyze`: Run static analysis on Pine Script code WITHOUT compiling — catches array out-of-bounds, unguarded array.first()/last(), bad loop bounds, and implicit bool casts. Works offline, no TradingView connection needed.
+- `pine_check`: Compile Pine Script via TradingView's server API without needing the chart open. Returns compilation errors/warnings. Useful for validating code before injecting into the chart.
+- `data_get_ohlcv`: Get OHLCV bar data from the chart. Use summary=true for compact stats instead of all bars (saves context).
+- `data_get_indicator`: Get indicator/study info and input values
+- `data_get_strategy_results`: Get strategy performance metrics from Strategy Tester
+- `data_get_trades`: Get trade list from Strategy Tester
+- `data_get_equity`: Get equity curve data from Strategy Tester
+- `quote_get`: Get real-time quote data for a symbol (price, OHLC, volume)
+- `depth_get`: Get order book / DOM (Depth of Market) data from the chart
+- `data_get_pine_lines`: Read horizontal price levels drawn by Pine Script indicators (line.new). Returns deduplicated price levels per study. Use study_filter to target a specific indicator.
+- `data_get_pine_labels`: Read text labels drawn by Pine Script indicators (label.new). Returns text and price pairs. Use study_filter to target a specific indicator.
+- `data_get_pine_tables`: Read table data drawn by Pine Script indicators (table.new). Returns formatted text rows per table. Use study_filter to target a specific indicator.
+- `data_get_pine_boxes`: Read box/zone boundaries drawn by Pine Script indicators (box.new). Returns deduplicated {high, low} price zones. Use study_filter to target a specific indicator.
+- `data_get_study_values`: Get current indicator values from the data window for all visible studies (RSI, MACD, Bollinger Bands, EMAs, custom indicators with plot()).
+- `capture_screenshot`: Take a screenshot of the TradingView chart
+- `draw_shape`: Draw a shape/line on the chart
+- `draw_list`: List all shapes/drawings on the chart
+- `draw_clear`: Remove all drawings from the chart
+- `draw_remove_one`: Remove a specific drawing by entity ID
+- `draw_get_properties`: Get properties and points of a specific drawing
+- `alert_create`: Create a price alert via the TradingView alert dialog
+- `alert_list`: List active alerts
+- `alert_delete`: Delete all alerts or open context menu for deletion
+- `batch_run`: Run an action across multiple symbols and/or timeframes
+- `replay_start`: Start bar replay mode, optionally at a specific date
+- `replay_step`: Advance one bar in replay mode
+- `replay_autoplay`: Toggle autoplay in replay mode, optionally set speed
+- `replay_stop`: Stop replay and return to realtime
+- `replay_trade`: Execute a trade action in replay mode (buy, sell, or close position)
+- `replay_status`: Get current replay mode status
+- `indicator_set_inputs`: Change indicator/study input values (e.g., length, source, period)
+- `indicator_toggle_visibility`: Show or hide an indicator/study on the chart
+- `watchlist_get`: Get all symbols from the current TradingView watchlist with last price, change, and change%
+- `watchlist_add`: Add a symbol to the TradingView watchlist
+- `ui_click`: Click a UI element by aria-label, data-name, text content, or class substring
+- `ui_open_panel`: Open, close, or toggle TradingView panels (pine-editor, strategy-tester, watchlist, alerts, trading)
+- `ui_fullscreen`: Toggle TradingView fullscreen mode
+- `layout_list`: List saved chart layouts
+- `layout_switch`: Switch to a saved chart layout by name or ID
+- `ui_keyboard`: Press keyboard keys or shortcuts (e.g., Enter, Escape, Alt+S, Ctrl+Z)
+- `ui_type_text`: Type text into the currently focused input/textarea element
+- `ui_hover`: Hover over a UI element by aria-label, data-name, or text content
+- `ui_scroll`: Scroll the chart or page up/down/left/right
+- `ui_mouse_click`: Click at specific x,y coordinates on the TradingView window
+- `ui_find_element`: Find UI elements by text, aria-label, or CSS selector and return their positions
+- `ui_evaluate`: Execute JavaScript code in the TradingView page context for advanced automation
+- `pane_list`: List all chart panes in the current layout with their symbols and active state
+- `pane_set_layout`: Change the chart grid layout (e.g., single, 2x2, 2h, 3v)
+- `pane_focus`: Focus a specific chart pane by index (0-based)
+- `pane_set_symbol`: Set the symbol on a specific pane by index
+- `tab_list`: List all open TradingView chart tabs
+- `tab_new`: Open a new chart tab
+- `tab_close`: Close the current chart tab
+- `tab_switch`: Switch to a chart tab by index
+
+## Usage
+
+Load this skill to access tradingview tools:
+
+```python
+skill_view('tradingview-mcp')
+```
+
+Tools will be fetched on-demand from the MCP server.
+
+## MCP Source
+
+Original MCP server: `tradingview`
+Configuration: `.mcp.json`
+
+## Implementation
+
+This skill uses the MCP-to-Skill proxy to:
+1. Spawn the original MCP server subprocess
+2. Fetch tool schemas on first `skill_view()` call
+3. Present tools through Hermes skill interface
+4. Route tool calls back to MCP server
+
+## Token Savings
+
+- Before: 15600+ tokens per session startup
+- After: 0 tokens until skill explicitly loaded

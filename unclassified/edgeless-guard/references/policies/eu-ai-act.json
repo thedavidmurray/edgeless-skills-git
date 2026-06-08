@@ -1,0 +1,72 @@
+{
+  "name": "eu-ai-act",
+  "version": "1.0.0",
+  "framework": "EU AI Act",
+  "description": "EU AI Act risk classification and high-risk AI deployment guardrails for agentic systems.",
+  "guard": {
+    "mode": "warn",
+    "redact_fields": [],
+    "max_output_bytes": 4096
+  },
+  "rules": [
+    {
+      "id": "eu_high_risk_biometric",
+      "type": "pattern",
+      "category": "high_risk_ai",
+      "severity": "critical",
+      "match": "\\b(biometric|fingerprint|facial recognition|iris|voiceprint|palm|vein|gait)\\b",
+      "message": "High-risk biometric system use case under EU AI Act Article 5/6.",
+      "suggestion": "Halt deployment until conformity assessment and registration.",
+      "remediation_steps": [
+        "Conduct conformity assessment under Article 43",
+        "Register in EU database",
+        "Post CE marking and instructions for use"
+      ]
+    },
+    {
+      "id": "eu_high_risk_credit",
+      "type": "pattern",
+      "category": "high_risk_ai",
+      "severity": "critical",
+      "match": "\\b(credit score|creditworthiness|lending|loan decision|mortgage underwriting)\\b",
+      "message": "High-risk credit scoring under EU AI Act Annex III.",
+      "suggestion": "Implement Article 10 data governance and Article 13 transparency."
+    },
+    {
+      "id": "eu_high_risk_employment",
+      "type": "pattern",
+      "category": "high_risk_ai",
+      "severity": "critical",
+      "match": "\\b(hire|firing|promotion|job match|cv rank|resume score)\\b",
+      "message": "High-risk employment decision system under EU AI Act.",
+      "suggestion": "Publish transparency and provide human oversight interface."
+    },
+    {
+      "id": "eu_prohibited_manipulation",
+      "type": "pattern",
+      "category": "prohibited",
+      "severity": "critical",
+      "match": "\\b(subliminal|covert manipulation|exploit vulnerability|target group)\\b",
+      "message": "Potential prohibited AI practice under EU AI Act Article 5.",
+      "suggestion": "Remove manipulative intent and notify compliance."
+    },
+    {
+      "id": "eu_chatbot_disclosure",
+      "type": "pattern",
+      "category": "transparency",
+      "severity": "high",
+      "match": "\\b(chatbot|assistant|agent|AI)\\b",
+      "message": "AI system must disclose artificial nature to users under Article 50.",
+      "suggestion": "Add system prompt disclosure and UI watermark."
+    }
+  ],
+  "exceptions": [],
+  "reporting": {
+    "formats": ["json", "txt"]
+  },
+  "tags": [
+    "eu-ai-act",
+    "regulation",
+    "risk-classification"
+  ]
+}

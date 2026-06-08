@@ -1,0 +1,33 @@
+//@version=5
+strategy("MA Crossover Strategy", shorttitle="MA Cross", overlay=true, initial_capital=10000, default_qty_type=strategy.percent_of_equity, default_qty_value=10)
+
+// Inputs
+fastLength = input.int(10, "Fast MA Length", minval=1, maxval=200)
+slowLength = input.int(30, "Slow MA Length", minval=1, maxval=200)
+
+// Calculations
+fastMA = ta.sma(close, fastLength)
+slowMA = ta.sma(close, slowLength)
+
+// Plotting
+plot(fastMA, "Fast MA", color=color.new(color.blue, 0), linewidth=2)
+plot(slowMA, "Slow MA", color=color.new(color.orange, 0), linewidth=2)
+
+// Signals
+longCondition = ta.crossover(fastMA, slowMA)
+shortCondition = ta.crossunder(fastMA, slowMA)
+
+// Strategy execution
+if longCondition
+    strategy.entry("Long", strategy.long, comment="Long Entry")
+    
+if shortCondition
+    strategy.close("Long", comment="Close Long")
+
+// Visual signals
+plotshape(longCondition, "Buy Signal", shape.triangleup, location.belowbar, color.green, size=size.small)
+plotshape(shortCondition, "Sell Signal", shape.triangledown, location.abovebar, color.red, size=size.small)
+
+// Alerts
+alertcondition(longCondition, title="MA Crossover - Buy", message='{"action": "buy", "strategy": "ma_crossover", "ticker": "{{ticker}}", "price": {{close}}, "time": "{{time}}"}')
+alertcondition(shortCondition, title="MA Crossover - Sell", message='{"action": "sell", "strategy": "ma_crossover", "ticker": "{{ticker}}", "price": {{close}}, "time": "{{time}}"}')

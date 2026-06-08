@@ -1,0 +1,362 @@
+---
+name: vault-knowledge-ops
+description: >
+  Manage the knowledge vault end-to-end: enforce canonical taxonomy and structure,
+  enrich incoming content with multi-track semantic classification, and run
+  automated synthesis agents that keep the vault self-organizing. Covers vault
+  structure enforcement, content ingestion & routing, collision detection,
+  migration workflows, and scheduled compilation.
+version: 1.0.0
+author: Hermes Agent
+license: MIT
+metadata:
+  tags: [vault, taxonomy, knowledge-management, content-enrichment, chromadb, routing, classification]
+  tier: task-specific
+  domain: knowledge
+  color: blue
+prerequisites:
+  commands: [python3, grep]
+---
+
+# Vault Knowledge Operations
+
+## Identity
+
+A vault steward who keeps the knowledge surface organized, enriched, and self-healing. Operates across three layers:
+1. **Structure** — canonical paths, numbered folders, collision detection, migration
+2. **Enrichment** — multi-track semantic classification, routing, quality scoring
+3. **Synthesis** — automated MOC generation, contradiction detection, scheduled compilation
+
+## When to Use
+
+- User mentions wrong vault location, taxonomy collision, or numbered-folder conflict
+- Incoming content (YouTube, RSS, podcasts) needs classification and routing to specialist tracks
+- Vault structure has drifted and needs remediation
+- Building or maintaining an automated compilation agent that generates MOCs and detects stale links
+- Deciding where generated media artifacts (renders, screenshots, build output) should be written
+
+## When NOT to Use
+
+- Search-only vault queries → use `search_files` or `session_search`
+- One-off note creation → just write the file
+- Full database administration → use ChromaDB-specific tools
+
+## Vault Taxonomy Enforcement
+
+Enforce the single source of truth per TAXONOMY.md v3.
+
+### Canonical Locations
+
+| Location | Canonical Path | Wrong Path (BLOCKED) |
+|----------|---------------|---------------------|
+| Vault | `~/claude-projects/claude-vault/` | `~/claude-vault/` ❌ |
+| Projects | `~/claude-projects/projects/` | `~/Projects/` ❌ |
+| Backlog | `~/claude-projects/backlog/` | `*/backlog/tasks/` ❌ |
+| Config | `~/.claude/`, `~/config/` | `*/05-config/` ❌ |
+
+### Numbered Folders (v3)
+
+| # | Folder | Purpose |
+|---|--------|---------|
+| 00 | 00-Inbox | Quick capture |
+| 01 | 01-Journal | Daily notes |
+| 02 | 02-Agents | Agent personas |
+| 03 | 03-Knowledge | Research/KB |
+| 04 | 04-Sessions | Session logs |
+| 05 | 05-Solutions | Problem-solution |
+| 06 | 06-Config | Configuration |
+| 07 | 07-Business | Business strategy |
+| 08 | 08-Reference | External refs |
+| 09 | 09-Secrets | Credentials |
+| 10 | 10-Meta | Meta-docs |
+| 11 | 11-Databases | Bases/Chroma |
+| 13 | 13-Reports | All reports |
+| 14 | 14-Knowledge-Bases | Structured KB |
+| 15 | 15-Products | Product docs |
+| 16 | 16-Projects | Project docs |
+| 17 | 17-Websites | Website builds |
+| 99 | 99-Archive | Cold storage |
+
+### Collision Detection & Migration
+
+Run the taxonomy validator:
+```bash
+python3 .claude/hooks/validate-taxonomy.py --check
+```
+
+When migrating content from wrong locations:
+1. Analyze the wrong location — count items, check for `.git/` dirs
+2. Identify conflicts — compare file sizes/content hashes
+3. Move files to canonical paths (use `shutil.move` for `.git/` preservation)
+4. Remove empty directories
+5. Add protection patterns to `~/.claude/hooks/patterns.yaml`
+
+### Generated Media Artifacts — Where Renders Go
+
+Never default to `~/Desktop/`. Route through canonical taxonomy:
+
+| Artifact Type | Canonical Workspace | Example |
+|---------------|---------------------|---------|
+| Video renders, loops | `~/claude-projects/generated/` | `generated/warning-icon-loop-30s.mp4` |
+| Screenshots | `~/claude-projects/captures/` | `captures/touchdesigner-preview.png` |
+| General build output | `~/claude-projects/output/` | `output/newsletter_digest.html` |
+| HTML artifacts, mockups | `~/claude-projects/generated/` or project subdir | `generated/hermes-design-system/` |
+
+Decision flow: transient render → `generated/`; durable knowledge → `claude-vault/<folder>/`; source code → `projects/`.
+
+## Agent Memory Tiering & Offload
+
+The agent's MEMORY.md is a 20,000-character HOT tier injected into every turn. Treating it as the only storage causes capacity crises and forces silent truncation of new facts. Route knowledge across three tiers:
+
+| Tier | Storage | Capacity | Purpose |
+|------|---------|----------|---------|
+| **HOT** | MEMORY.md | 20K chars | Active blockers, auth status, provider health, recent decisions |
+| **WARM** | ChromaDB | 6,300+ docs, 22 collections | Semantic search: KB articles, specs, patterns, debug solutions |
+| **COLD** | Obsidian Vault | 2.6GB, 5,100+ files | Canonical long-form: reports, archived projects, SOPs, incident detail |
+
+### Offload Triggers
+
+Offload from MEMORY.md when any of these are true:
+- **Capacity >90%** — headroom drops below 2,000 chars
+- **Staleness** — completed/resolved entries older than 7 days
+- **Wrong tier** — detailed incident reports, migration logs, behavior patterns belong in COLD
+- **Duplication** — same pattern described in 2+ entries (consolidate to single vault page)
+- **Reference weight** — primarily pointers to stable paths (keep pointer, move detail)
+
+### Offload Workflow
+
+1. **Identify candidates** — scan MEMORY.md for longest/stale entries matching triggers
+2. **Write vault pages** — create markdown with YAML frontmatter under `03-Knowledge/<topic>/`
+3. **Create index** — if 3+ related pages, write `index.md` in the subdirectory
+4. **Replace with pointers** — replace heavy entry in MEMORY.md with <150 char vault reference
+5. **Update meta-entry** — keep a MEMORY.md entry documenting the 3-tier architecture and vault index location
+
+### Canonical Offload Directories
+
+| Topic | Vault Path |
+|-------|-----------|
+| Agent behavior patterns | `03-Knowledge/Agent-Infrastructure/hive-memory-offload/` |
+| Infrastructure incidents | `03-Knowledge/Agent-Infrastructure/` |
+| Trading system details | `03-Knowledge/Trading/Pamela/` |
+| Discord / swarm ops | `03-Knowledge/Agent-Infrastructure/` |
+| Design system specs | `03-Knowledge/Design/` |
+
+See full pattern documentation: `references/agent-memory/3-tier-offload-pattern.md`
+
+## Multi-Track Content Enrichment
+
+Classify incoming content into semantic tracks, each triggering distinct downstream workflows.
+
+### The 7 Standard Tracks
+
+| Track | Purpose | Downstream Agent |
+|-------|---------|------------------|
+| **knowledge** | General learning & synthesis | Scribe |
+| **tool_workflow** | Tool evaluation & installation | Kilo/Beau |
+| **people** | Network building & collaboration | Curator |
+| **trading_intel** | Market signals & predictions | Pamela |
+| **creative_seeds** | Generative art techniques | Critic/Specimen |
+| **code_patterns** | Reusable code snippets | Kilo |
+| **opportunity** | Business/product ideas | Builder |
+
+### Enrichment Schema
+
+Every enriched note carries:
+```yaml
+enrichment_tier: 3            # 0-3 scale
+track_tags: [knowledge, tool_workflow]
+context: "Why this matters to you"
+one_liner: "Tweet-length summary"
+vault_connections: [[Related-1]], [[Related-2]]
+```
+
+Score = universal_fields (max 5) + populated_track_payloads (1 each).
+
+### Bulk Enrichment Pattern
+
+For 100+ notes, use keyword-based assignment instead of transcript fetching:
+
+```python
+TRACK_KEYWORDS = {
+    "tool_workflow": ["claude code", "cargo", "npm", "docker", "uv"],
+    "creative_seeds": ["touchdesigner", "shader", "generative", "p5.js"],
+    "trading_intel": ["polymarket", "prediction", "market"],
+    "code_patterns": ["rust", "pattern", "idiomatic"],
+    "opportunity": ["startup", "gap", "someone should"],
+}
+
+def assign_tracks_by_keywords(channel, title):
+    text = f"{channel} {title}".lower()
+    tracks = ["knowledge"]
+    for track, keywords in TRACK_KEYWORDS.items():
+        if any(kw in text for kw in keywords):
+            tracks.append(track)
+    return list(set(tracks))
+```
+
+This pattern enriched 154 notes in <1 second vs. 30+ minutes for transcript-based detection.
+
+### Source-Specific Enrichment: arXiv and Academic Papers
+
+When enriching a single arXiv item from the RSS pipeline (e.g., EDGA-6025), the minimal note produced by the triage pipeline contains only title, abstract, and score. Upgrading it to a full KB article requires fetching structured metadata and expanding the content.
+
+**arXiv API (metadata only):**
+```bash
+# Fetch abstract, authors, published date, categories
+curl -s "https://export.arxiv.org/api/query?id_list=2605.27681" | grep -o '<summary>[^<]*' | sed 's/<summary>//'
+curl -s "https://export.arxiv.org/api/query?id_list=2605.27681" | grep -o '<name>[^<]*' | sed 's/<name>//'
+curl -s "https://export.arxiv.org/api/query?id_list=2605.27681" | grep -o '<published>[^<]*' | sed 's/<published>//'
+curl -s "https://export.arxiv.org/api/query?id_list=2605.27681" | grep -o '<category term="[^\"]*' | sed 's/<category term="//'
+```
+
+**Jina AI reader (quick webpage extraction):**
+```bash
+# Extract readable markdown from any URL when an API is unavailable
+curl -s "https://r.jina.ai/http://arxiv.org/abs/2605.27681" | head -100
+```
+
+**Limitations:** Jina AI returns HTML-page content only; it does NOT extract from PDF URLs. For direct arXiv PDF URLs, see `references/arxiv-enrichment-patterns.md` §"PDF Direct Extraction" for the curl+pdftotext fallback chain.
+
+**Two-stage enrichment flow:**
+1. **RSS pipeline** creates minimal note: `claude-vault/03-Knowledge/RSS/cs.AI/reasoning-and-planning-with-dynamically-.md` (title, abstract, score, source)
+2. **Enrichment agent** (this skill) upgrades it to a full KB article with: executive summary, technical deep-dive, comparison tables, real-world applications, action items, key quotes, cross-references, and full frontmatter (`kb_score`, `enrichment_tier`, `vault_connections`)
+
+See `references/arxiv-enrichment-patterns.md` for full reproduction commands and a worked example.
+
+### ChromaDB Integration
+
+Track assignment feeds into semantic clustering:
+- Notes cluster by content similarity within tracks
+- Emergent clusters suggest new track creation
+- Cross-track connections discovered via embedding similarity
+
+## Automated Vault Synthesis
+
+Run scheduled compilation agents that cross-reference ChromaDB + vault markdown to detect drift, generate MOCs, and surface contradictions.
+
+### What the Agent Does
+
+1. **Queries ChromaDB** — pulls recent embeddings from domain-relevant collections
+2. **Scans vault markdown** — finds files matching knowledge domain keywords
+3. **Detects contradictions** — duplicate folders (`OnChain-Art` vs `On-Chain-Art`), stale wiki links
+4. **Generates MOC pages** — Map of Content per domain with cross-references and source inventory
+5. **Writes idempotently** — content-hash deduplication prevents duplicate writes
+
+### Running the Agent
+
+```bash
+# Dry run (safe default)
+DRY_RUN=1 python scripts/vault-compilation-agent.py
+
+# Apply writes (only when preview looks correct)
+APPLY=1 python scripts/vault-compilation-agent.py
+```
+
+### Blog-Topic Miner Variant
+
+A specialized compilation agent that mines blog topics instead of MOCs. It cross-pollinates two ChromaDB collections from different semantic domains, uses an LLM to find the strongest conceptual bridge, and emits a structured blog framework (TITLE / THESIS / HOOK / SECTIONS / SOURCES / ANGLE). See `references/overnight-blog-topic-miner.md` for the miner design and `references/blog-content-pipeline.md` for the full 6-stage pipeline (drafts → autoreason → council → prep → publish).
+
+### Cron Schedule
+
+```cron
+# Weekly synthesis — Sundays at 3 AM
+0 3 * * 0 cd ~/claude-projects && DRY_RUN=1 python scripts/vault-compilation-agent.py
+
+# Monthly full apply — first Sunday
+0 3 1-7 * 0 cd ~/claude-projects && APPLY=1 python scripts/vault-compilation-agent.py
+```
+
+## Pitfalls
+
+- **Path resolution bug**: Use `PROJECT_ROOT / "claude-vault"`, NOT `Path.home() / "claude-vault"`.
+- **Double-nesting bug**: Use `PROJECT_ROOT / "claude-vault" / "03-Knowledge"`, NOT `Path("~/claude-vault") / "claude-vault" / "03-Knowledge"`.
+- **youtube-transcript-api v1.0.0+**: Uses `.text` attribute, NOT `["text"]` dict access.
+- **Bulk enrichment speed**: Reserve transcript analysis for Tier-3 enrichment only; use keyword assignment for large batches.
+- **Hash consistency bug**: When computing content hashes for idempotent writes, the verification must use exactly the same input as the generation step. Store the hash-computation expression in a variable and reuse it.
+- **ChromaDB v2 JSON control characters**: The v2 API returns raw control characters in collection metadata. Strip ASCII 0-31 (except tab/newline/CR) before `json.loads`. See `references/chromadb-v2-api-patterns.md`.
+- **ChromaDB v2 count endpoint returns raw integer**: Parse with `int(r.text)`, NOT `r.json()["count"]`.
+- **LLM reasoning contamination in generation**: Reasoning models (Kimi K2.5, Claude, o3) leak chain-of-thought into content generation output. Always post-process with `clean_improved_draft()` to strip trailing "Wait," "Let me," and "Actually," paragraphs. See `references/llm-output-cleaning.md`.
+- **Reasoning-model JSON null-content bug**: DeepSeek V4 Flash and similar reasoning-first models may return `content: null` with the actual JSON embedded in a separate `reasoning` field. Fall back to `msg.get('reasoning')` when `content` is None, then parse JSON from that text. See `references/content-enrichment/api-resilience-batch-enrichment.md`.
+- **Batch inference API flakiness**: The Nous Research inference API (`inference-api.nousresearch.com`) returns 401s and timeouts under sustained load for `deepseek-v4-flash:free` even though single requests succeed. Do not rely on it for batch enrichment without exponential-backoff retry logic and a provider fallback. See `references/content-enrichment/api-resilience-batch-enrichment.md`.
+- **Autoreason skip auto re-score**: Re-scoring a draft with the same model that just improved it produces bogus results (either hallucinated low scores from parsing reasoning text, or inflated self-approval). Skip automatic re-score; let the next stage (council or different model) verify.
+- **Desktop default anti-pattern**: Never write media artifacts to `~/Desktop/` without explicit user instruction.
+- **Paperclip checkout `expectedStatuses` enum**: The `POST /api/issues/{id}/checkout` endpoint requires `expectedStatuses` as an array of valid enum values: `backlog`, `todo`, `in_progress`, `in_review`, `done`, `blocked`, `cancelled`. `open` is NOT a valid enum and will fail validation. The correct call for a freshly-created ticket is `{"agentId": "...", "expectedStatuses": ["todo"]}`.
+- **`web_extract` truncates arXiv PDFs** — PDF URLs passed to web_extract return only ~5K chars (the first section of the paper). Do NOT retry with different parameters; immediately fall through to curl + pdftotext. See `references/arxiv-enrichment-patterns.md` §"PDF Direct Extraction".
+
+## Frontmatter Schema Convergence
+
+The vault has 3-4 coexisting frontmatter schemas (YouTube enrichment, Books, split schema v2.0, wiki provisional). When extending schema, follow this order:
+
+1. **Audit existing** — scan current schema files (`_system/FRONTMATTER-SCHEMA.md`, wiki `CLAUDE.md`, YouTube note template)
+2. **Reconcile before adding** — map proposed fields to existing fields; avoid aliases
+3. **Add only high-ROI fields** — `confidence` and `contested` are useful; `contradictions` arrays and `sources` arrays are bookkeeping overhead
+4. **Update canonical schema doc** — patch `_system/FRONTMATTER-SCHEMA.md`, not a new file
+5. **Backfill optional** — don't require new fields on existing notes; let them accumulate organically
+
+Example safe addition (session 2026-05-21):
+```yaml
+# Added to FRONTMATTER-SCHEMA.md v2.0+
+confidence: high    # well-supported across multiple sources
+contested: true     # unresolved contradictions exist; see related notes
+```
+
+Anti-pattern: Adding `type: entity|concept|comparison` when `note_type` already exists. Adding `sources:` array when `source_url` + `related:` wikilinks cover 90% of use cases.
+
+## Directory Structure
+
+```
+~/.hermes/skills/knowledge/vault-knowledge-ops/
+├── SKILL.md
+├── references/
+│   ├── agent-memory/
+│   │   └── 3-tier-offload-pattern.md      # MEMORY.md overflow management
+│   ├── vault-taxonomy/
+│   │   ├── SKILL-archive.md
+│   │   ├── collision-remediation-session-2026-05-05.md
+│   │   └── vault-compilation-agent-pattern.md
+│   ├── content-enrichment/
+│   │   ├── SKILL-archive.md
+│   │   ├── session-2026-05-06-batch-implementation.md
+│   │   ├── track-processors-implementation.md
+│   │   └── youtube-session-results-may-2026.md
+│   ├── chromadb-v2-api-patterns.md        # Raw HTTP patterns for v2 API
+│   ├── overnight-blog-topic-miner.md      # Cross-domain blog framework miner
+  ├── blog-content-pipeline.md           # Full 6-stage vault-to-publish pipeline
+  ├── content-sanitization-rules.md        # Scrub internal identifiers before publication
+  ├── vault-wiki-integration.md          # Obsidian vault + llm-wiki bridge pattern
+│   └── tag-taxonomy-extraction.md         # Extract canonical tags from vault frontmatter
+├── templates/
+│   ├── enriched-note-frontmatter.yaml
+│   └── vault-compilation-agent.py
+└── scripts/
+    ├── verify-canonical-vault.py
+    └── verify_track_processors.py
+```
+
+## References
+
+- `references/maigret-people-bridge.md` — Maigret OSINT integration for discovering public figures and routing them into the vault people track + soul database pipeline
+- `references/agent-memory/3-tier-offload-pattern.md` — MEMORY.md overflow management: 3-tier architecture, offload triggers, workflow, canonical directories, capacity monitoring
+- `references/vault-taxonomy/SKILL-archive.md` — Full archived skill: canonical paths, collision detection, migration, media artifact routing
+- `references/vault-taxonomy/collision-remediation-session-2026-05-06.md` — Session recipes for specific collision types
+- `references/vault-taxonomy/vault-compilation-agent-pattern.md` — Full synthesis agent design pattern
+- `references/vault-wiki-integration.md` — Obsidian vault + llm-wiki bridge: existing wiki detection, MOC integration, frontmatter convergence, anti-patterns from 2026-05-21 session
+- `references/tag-taxonomy-extraction.md` — Extract canonical tags from vault frontmatter: harvest raw tags, consolidate to canonical list, write `10-Meta/tag-taxonomy.md`, avoid mass-backfill churn
+- `references/content-enrichment/SKILL-archive.md` — Full archived skill: track classification, routing, ChromaDB integration, bulk enrichment
+- `references/content-enrichment/session-2026-05-06-batch-implementation.md` — Production-scale batch enrichment (885 notes, 26s, +37% coverage)
+- `references/content-enrichment/api-resilience-batch-enrichment.md` — API resilience for batch vault enrichment: provider test results (Nous, Google, Cerebras), reasoning-model null-content bug, retry logic pattern, script path discrepancy, model substitution reference
+- `references/content-enrichment/track-processors-implementation.md` — Track processor implementation guide
+- `references/arxiv-enrichment-patterns.md` — arXiv API metadata extraction, Jina AI reader, PDF direct extraction (curl+pdftotext fallback), two-stage RSS→KB enrichment flow. Now covers both RSS-pipeline and user-initiated direct PDF workflows.
+- `templates/enriched-note-frontmatter.yaml` — Starter frontmatter template for enriched notes
+- `templates/vault-compilation-agent.py` — Starter template for new compilation agents
+- `scripts/verify-canonical-vault.py` — Taxonomy validator script
+- `scripts/verify_track_processors.py` — Track processor verification script
+- `references/content-sanitization-rules.md` — Scrub internal bot/agent names, project codes, and infrastructure details from public-facing content before publication. Platform-specific exposure levels.
+- `references/chromadb-v2-api-patterns.md` — Raw HTTP patterns for querying ChromaDB v2 from Python/shell: control-character stripping, count endpoint quirks, sampling with `where_document`
+- `references/swarm-memory-ideation-framework.md` — 4-pillar framework for designing shared memory in multi-agent systems: proactive injection, session extraction, cross-agent reconciliation, knowledge health. 8 concrete proposals with implementation sequence.
+- `references/overnight-blog-topic-miner.md` — Vault-synthesis agent variant that cross-pollinates ChromaDB collections to generate blog topic frameworks (not full posts)
+- `references/blog-content-pipeline.md` — Full 6-stage pipeline: frameworks → drafts → autoreason tournament → council interrogation → platform prep → publication
+- `references/llm-output-cleaning.md` — Strip reasoning-model chain-of-thought contamination from generated content. `clean_improved_draft()` pattern + prompt lock rules.
+- `references/external-essay-to-kb-workflow.md` — Converting long-form external essays into rich vault KB entries with explicit connections to internal work. Extraction techniques, sectioned summary format, key quotes, cross-references.
+- `references/arxiv-enrichment-patterns.md` — arXiv API metadata extraction, Jina AI reader, two-stage RSS→KB enrichment flow, Paperclip checkout enum pitfall, kb_score 12+ checklist. Now covers PDF direct extraction for user-initiated arXiv PDF URLs.
+- `~/claude-projects/claude-vault/_system/TAXONOMY.md` — Canonical structure definition

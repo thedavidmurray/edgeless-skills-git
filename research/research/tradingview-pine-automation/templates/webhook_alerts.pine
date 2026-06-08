@@ -1,0 +1,92 @@
+//@version=5
+indicator("Webhook Alert System", shorttitle="WebhookAlerts", overlay=true)
+
+// === INPUTS ===
+fastMA = input.int(9, "Fast MA", group="Moving Averages")
+slowMA = input.int(21, "Slow MA", group="Moving Averages")
+rsiLen = input.int(14, "RSI Length", group="RSI Settings")
+rsiOB = input.int(70, "RSI Overbought", group="RSI Settings")
+rsiOS = input.int(30, "RSI Oversold", group="RSI Settings")
+
+// Enable/disable alert types
+enableMACross = input.bool(true, "Enable MA Crossover Alerts", group="Alert Configuration")
+enableRSIExtreme = input.bool(true, "Enable RSI Extreme Alerts", group="Alert Configuration")
+enableVolume = input.bool(true, "Enable Volume Spike Alerts", group="Alert Configuration")
+
+// Webhook URL (for reference - set in TradingView alert dialog)
+webhookUrl = input.string("https://your-bot.com/webhook", "Webhook URL (copy to alert settings)", group="Alert Configuration")
+
+// === CALCULATIONS ===
+// Moving Averages
+fast = ta.sma(close, fastMA)
+slow = ta.sma(close, slowMA)
+
+// RSI
+rsiValue = ta.rsi(close, rsiLen)
+
+// Volume analysis
+avgVolume = ta.sma(volume, 20)
+volumeSpike = volume > avgVolume * 2
+
+// === SIGNALS ===
+// MA Crossover signals
+maLong = ta.crossover(fast, slow)
+maShort = ta.crossunder(fast, slow)
+
+// RSI signals
+rsiOversold = rsiValue < rsiOS
+rsiOverbought = rsiValue > rsiOB
+rsiExitOS = ta.crossover(rsiValue, rsiOS)
+rsiExitOB = ta.crossunder(rsiValue, rsiOB)
+
+// Combined signals (confluence)
+strongBuy = maLong and rsiExitOS
+strongSell = maShort and rsiExitOB
+
+// === PLOTTING ===
+plot(fast, "Fast MA", color=color.new(color.blue, 0))
+plot(slow, "Slow MA", color=color.new(color.orange, 0))
+
+// Signal markers
+plotshape(maLong and enableMACross, "MA Buy", shape.triangleup, location.belowbar, color.green, size=size.small)
+plotshape(maShort and enableMACross, "MA Sell", shape.triangledown, location.abovebar, color.red, size=size.small)
+plotshape(volumeSpike and enableVolume, "Volume Spike", shape.circle, location.belowbar, color.purple, size=size.tiny)
+
+// Background for RSI extremes
+bgcolor(rsiOversold and enableRSIExtreme ? color.new(color.green, 90) : rsiOverbought and enableRSIExtreme ? color.new(color.red, 90) : na)
+
+// === ALERTS ===
+// Build JSON message components
+baseMsg = '{"ticker": "{{ticker}}", "exchange": "{{exchange}}", "price": {{close}}, "volume": {{volume}}, "time": "{{time}}", "interval": "{{interval}}"'
+
+// MA Crossover alerts
+maBuyMsg = baseMsg + ', "signal": "ma_crossover_buy", "strength": "' + (strongBuy ? "strong" : "normal") + '"}'
+maSellMsg = baseMsg + ', "signal": "ma_crossover_sell", "strength": "' + (strongSell ? "strong" : "normal") + '"}'
+
+alertcondition(maLong and enableMACross, title="🟢 MA Crossover Buy", message=maBuyMsg)
+alertcondition(maShort and enableMACross, title="🔴 MA Crossover Sell", message=maSellMsg)
+
+// RSI alerts
+rsiBuyMsg = baseMsg + ', "signal": "rsi_exit_oversold", "rsi": ' + str.tostring(rsiValue, "#.##") + '}'
+rsiSellMsg = baseMsg + ', "signal": "rsi_exit_overbought", "rsi": ' + str.tostring(rsiValue, "#.##") + '}'
+
+alertcondition(rsiExitOS and enableRSIExtreme, title="🟢 RSI Exit Oversold", message=rsiBuyMsg)
+alertcondition(rsiExitOB and enableRSIExtreme, title="🔴 RSI Exit Overbought", message=rsiSellMsg)
+
+// Volume spike alert
+volMsg = baseMsg + ', "signal": "volume_spike", "volume_ratio": ' + str.tostring(volume / avgVolume, "#.##") + '}'
+alertcondition(volumeSpike and enableVolume, title="📊 Volume Spike", message=volMsg)
+
+// Unified dynamic alert (triggers on any signal)
+anySignal = (maLong and enableMACross) or (maShort and enableMACross) or (rsiExitOS and enableRSIExtreme) or (rsiExitOB and enableRSIExtreme) or (volumeSpike and enableVolume)
+
+signalType = maLong ? "ma_buy" : maShort ? "ma_sell" : rsiExitOS ? "rsi_buy" : rsiExitOB ? "rsi_sell" : volumeSpike ? "volume_spike" : "none"
+signalStrength = strongBuy ? "strong_buy" : strongSell ? "strong_sell" : "normal"
+
+unifiedMsg = baseMsg + ', "signal_type": "' + signalType + '", "signal_strength": "' + signalStrength + '", "rsi": ' + str.tostring(rsiValue, "#.##") + '}'
+
+alertcondition(anySignal, title="🔔 Any Signal", message=unifiedMsg)
+
+// Bar close alert for consolidated signals
+if anySignal
+    alert(unifiedMsg, alert.freq_once_per_bar_close)

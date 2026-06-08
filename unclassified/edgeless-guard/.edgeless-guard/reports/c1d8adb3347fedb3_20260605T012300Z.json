@@ -1,0 +1,9 @@
+{
+  "run_id": "c1d8adb3347fedb3",
+  "profile": "hipaa",
+  "guard_mode": "block",
+  "target": "/tmp/guard-target.txt",
+  "blocked": false,
+  "violations": [],
+  "details": {}
+}

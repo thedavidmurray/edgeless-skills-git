@@ -1,0 +1,35 @@
+//@version=5
+indicator("RSI Multi-Level Indicator", shorttitle="RSI Multi", overlay=false, timeframe="", timeframe_gaps=true)
+
+// Inputs
+rsiLength = input.int(14, "RSI Length", minval=1, maxval=50)
+showOverbought = input.bool(true, "Show Overbought Zone")
+showOversold = input.bool(true, "Show Oversold Zone")
+overboughtLevel = input.int(70, "Overbought Level", minval=50, maxval=90)
+oversoldLevel = input.int(30, "Oversold Level", minval=10, maxval=50)
+
+// RSI Calculation
+rsi = ta.rsi(close, rsiLength)
+
+// Dynamic color based on RSI level
+col = rsi > overboughtLevel ? color.red : rsi < oversoldLevel ? color.green : color.gray
+
+// Plot RSI line
+plot(rsi, "RSI", color=col, linewidth=2)
+
+// Reference lines
+hline(overboughtLevel, "Overbought", color=color.new(color.red, 50), linestyle=hline.style_dashed)
+hline(oversoldLevel, "Oversold", color=color.new(color.green, 50), linestyle=hline.style_dashed)
+hline(50, "Neutral", color=color.new(color.gray, 50), linestyle=hline.style_dotted)
+
+// Background zones
+bgcolor(showOverbought and rsi > overboughtLevel ? color.new(color.red, 90) : showOversold and rsi < oversoldLevel ? color.new(color.green, 90) : na, title="Extreme Zones")
+
+// Bands fill
+band1 = hline(80, "Upper Band", color=color.new(color.purple, 80))
+band2 = hline(20, "Lower Band", color=color.new(color.purple, 80))
+fill(band1, band2, color=color.new(color.purple, 95), title="Background")
+
+// Alert conditions
+alertcondition(ta.crossover(rsi, oversoldLevel), title="RSI Exit Oversold", message='{"indicator": "rsi", "signal": "exit_oversold", "value": {{plot_0}}, "ticker": "{{ticker}}"}')
+alertcondition(ta.crossunder(rsi, overboughtLevel), title="RSI Exit Overbought", message='{"indicator": "rsi", "signal": "exit_overbought", "value": {{plot_0}}, "ticker": "{{ticker}}"}')

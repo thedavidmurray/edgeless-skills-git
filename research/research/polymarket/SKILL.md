@@ -1,0 +1,170 @@
+---
+name: polymarket
+description: >
+  Query Polymarket prediction market data — search markets, get prices, orderbooks,
+  and price history. Read-only via public REST APIs. Use when: user asks about
+  prediction markets, betting odds, event probabilities, market prices, or wants
+  to track prediction market movements. No API key needed. Output: Market data
+  with probabilities, orderbook snapshots, or price history.
+version: 1.0.0
+author: Hermes Agent + Teknium
+license: MIT
+metadata:
+  tags: [polymarket, prediction-markets, market-data, trading, odds, betting, crypto]
+  tier: task-specific
+  domain: research
+  color: green
+prerequisites:
+  commands: [curl, jq]
+---
+
+# Polymarket — Prediction Market Data
+
+## Identity (Who This Agent Is)
+
+A prediction market intelligence specialist that translates betting odds into
+actionable probability insights. Operates strictly read-only — no trading,
+no positions, just data retrieval and analysis.
+
+## When to Use
+
+- User asks about prediction markets, betting odds, or event probabilities
+- User wants to know "what are the odds of X happening?"
+- User asks about Polymarket specifically
+- User wants market prices, orderbook data, or price history
+- User asks to monitor or track prediction market movements
+- Comparing market predictions across different events
+
+## When NOT to Use
+
+- **Placing trades or positions** → This skill is read-only; trading requires wallet auth
+- **Financial advice** → Present data only, not recommendations
+- **Complex portfolio analysis** → Use specialized trading tools
+
+## Core Mission
+
+Retrieve and present prediction market data from Polymarket's public APIs,
+translating raw market prices into human-readable probability statements while
+maintaining strict read-only access.
+
+## Critical Rules
+
+1. **Read-only only** — Never attempt trading; it requires crypto wallet auth
+2. **Present as probabilities** — Price 0.65 = "65% likely"
+3. **Include volume context** — Show liquidity with probability ($X volume)
+4. **Double-encode handling** — Parse `outcomePrices` with `json.loads()` when processing
+5. **Rate limit awareness** — Respect API limits (4000/10s Gamma, 9000/10s CLOB)
+
+## Instructions
+
+### Phase 1: Discovery
+
+1. Search for relevant markets using Gamma API:
+   ```bash
+   curl -s "https://gamma-api.polymarket.com/public-search?q=[QUERY]" | jq .
+   ```
+2. Identify matching events and their nested markets
+3. Note: Events contain 1+ Markets (1:many relationship)
+
+### Phase 2: Data Retrieval
+
+1. **Get current prices** (for simple queries):
+   - Use `outcomePrices` from search results
+   - Parse as JSON: `["0.652", "0.348"]` → Yes: 65.2%, No: 34.8%
+
+2. **Get orderbook** (when user asks for depth):
+   ```bash
+   # Extract clobTokenIds from market data (JSON string array)
+   curl -s "https://clob.polymarket.com/book?token_id=[YES_TOKEN_ID]" | jq .
+   ```
+
+3. **Get price history** (when user asks for trends):
+   ```bash
+   # Use conditionId from market data
+   curl -s "https://clob.polymarket.com/prices-history?condition_id=[ID]" | jq .
+   ```
+
+### Phase 3: Presentation
+
+1. **Format probabilities**:
+   - `0.652` → "65.2%"
+   - Always show both sides: "Yes: 65.2%, No: 34.8%"
+
+2. **Include context**:
+   - Market question (exact wording)
+   - Probability with volume: `"Will X happen?" — 65.2% Yes ($1.2M volume)`
+
+3. **Explain limitations** if relevant:
+   - Geographic restrictions on trading
+   - Read-only access (no position-taking)
+
+## Deliverables
+
+| Output | Format | Example |
+|--------|--------|---------|
+| Market search results | Summary table | Event → Markets → Probabilities |
+| Single market deep-dive | Formatted text | Question + odds + volume |
+| Orderbook snapshot | Bid/ask spread | Best bid/ask prices + depth |
+| Price history | Trend description | Price movement over time |
+
+## Success Metrics
+
+| Metric | Target | Measurement |
+|--------|--------|-------------|
+| Probability accuracy | 100% | Correct parsing of outcomePrices |
+| Response time | <3s | For cached/simple queries |
+| API error handling | 100% | Graceful failure with retry guidance |
+| Data freshness | Real-time | Using live CLOB API |
+
+## Cross-References
+
+- For trading/brokerage operations → Not supported (read-only skill)
+- For general research → `research-paper-writing` skill
+- For data analysis → `data-science` skills
+
+## Key Concepts
+
+- **Events** contain one or more **Markets** (1:many relationship)
+- **Markets** are binary outcomes with Yes/No prices between 0.00 and 1.00
+- **Prices ARE probabilities**: price 0.65 means the market thinks 65% likely
+- `outcomePrices` field: JSON-encoded array like `["0.80", "0.20"]`
+- `clobTokenIds` field: JSON-encoded array of two token IDs [Yes, No] for price/book queries
+- `conditionId` field: hex string used for price history queries
+- Volume is in USDC (US dollars)
+
+## Three Public APIs
+
+1. **Gamma API** at `gamma-api.polymarket.com` — Discovery, search, browsing
+2. **CLOB API** at `clob.polymarket.com` — Real-time prices, orderbooks, history
+3. **Data API** at `data-api.polymarket.com` — Trades, open interest
+
+## Typical Workflow
+
+When a user asks about prediction market odds:
+
+1. **Search** using the Gamma API public-search endpoint with their query
+2. **Parse** the response — extract events and their nested markets
+3. **Present** market question, current prices as percentages, and volume
+4. **Deep dive** if asked — use clobTokenIds for orderbook, conditionId for history
+
+## Parsing Double-Encoded Fields
+
+The Gamma API returns `outcomePrices`, `outcomes`, and `clobTokenIds` as JSON strings
+inside JSON responses (double-encoded). When processing with Python, parse them with
+`json.loads(market['outcomePrices'])` to get the actual array.
+
+## Rate Limits
+
+Generous — unlikely to hit for normal usage:
+- Gamma: 4,000 requests per 10 seconds (general)
+- CLOB: 9,000 requests per 10 seconds (general)
+- Data: 1,000 requests per 10 seconds (general)
+
+## Limitations
+
+- This skill is read-only — it does not support placing trades
+- Trading requires wallet-based crypto authentication (EIP-712 signatures)
+- Some new markets may have empty price history
+- Geographic restrictions apply to trading but read-only data is globally accessible
+
+See `references/api-endpoints.md` for the full endpoint reference with curl examples.

@@ -1,0 +1,183 @@
+---
+name: cli-dashboards
+title: CLI Dashboards and Terminal Reporting
+category: software-development
+description: Build Tufte-minimal data dashboards in the terminal using rich + sqlite. No web stack, no polling until design is locked. Simulated backfill for preview.
+---
+
+# CLI Dashboards and Terminal Reporting
+
+Build data dashboards that run in the terminal. No web server, no browser, no polling loops until the design is locked.
+
+## When to use
+
+- User wants to see data without opening a browser
+- User wants retro-futuristic / terminal-brutalist aesthetic
+- Reporting on trades, metrics, or system state
+- Quick iteration before committing to a web dashboard
+
+## Principles
+
+1. **Terminal-first, web later.** Start with `rich` tables in the terminal. Only graduate to Streamlit/Grafana after the data shape and report layout are validated.
+2. **No polling until locked.** Do not add live refresh, WebSocket feeds, or cron polling until the static report design is approved. Polling on a broken dashboard just produces noise.
+3. **Tufte minimal.** Sparklines inline. Tabular-nums for quantities. No decorative chart junk. 1px borders. Monospace. Let data speak.
+4. **Simulated data for preview.** Seed the database with realistic mock data so the user sees the shape before live data arrives. Replace mock inserts with real inserts later — zero schema changes.
+5. **Dual UI pattern.** Build a terminal report (`rich`) AND a static HTML companion simultaneously. The terminal is for quick CLI checks; the HTML is for staring at the shape and sharing screenshots. Both read from the same SQLite DB.
+
+## Technique
+
+### Stack
+- `rich` (Python) — tables, colors, sparklines
+- `sqlite3` (stdlib) — store and query
+- `csv` (stdlib) — export for Excel/R/Python
+
+### Pattern: flux_report.py shape
+
+```python
+# 1. Schema with agent_id for virtual partition
+CREATE TABLE flux_trades (
+    trade_id TEXT PRIMARY KEY,
+    agent_id TEXT NOT NULL,       -- "kilo" or "pamela" for per-agent attribution
+    regime   TEXT NOT NULL,       -- e.g. trending_bull, neutral_range
+    strategy TEXT NOT NULL,       -- e.g. PMCC, EBCP, 0DTE
+    pnl_pct  REAL,
+    ...
+);
+
+# 2. Seed function with realistic distributions per category
+#    NOT uniform random — use Gaussian with regime-conditional means
+#    Example: PMCC mean +3.8% σ=4.2, EBCP mean +2.4% σ=2.8
+#    Add tail risk: Pareto left tail for strategies with known blow-up risk
+
+# 3. Materialized regime matrix
+#    GROUP BY agent_id, regime, strategy
+#    Rebuild on demand with --rebuild flag
+
+# 4. Render with rich.Table
+#    box.MINIMAL_DOUBLE_HEAD, no heavy grid
+#    Sparklines as Unicode blocks inline
+#    Activity bars: relative volume per cell
+
+# 5. CLI args
+#    --agent     Filter by agent (virtual partition)
+#    --month     Filter by YYYY-MM
+#    --format    csv | terminal
+#    --live      Show open positions (exit_date IS NULL)
+#    --seed      (Re)populate simulated data
+#    --rebuild   Recompute materialized matrix
+```
+
+### Dual UI: Terminal + HTML Companion
+
+Build both at once. They share the same SQLite DB but serve different purposes:
+
+| UI | Purpose | When to Use |
+|---|---|---|
+| Terminal (`rich`) | Quick CLI checks, daily stand-ups, CSV export | You're in a shell |
+| HTML (`file://`) | Staring at shape, sharing screenshots, mobile view | You want to look at data |
+
+HTML styling: dark teal bg (`#0a1212`), monospace, 1px borders, electric cyan (`#00E5FF`) for gains, coral red (`#FF6B6B`) for losses. No frameworks — pure CSS + tables.
+
+### Color palette (terminal-brutalist)
+- Headers: `#B4B4B4` (dim white)
+- Gains / positive: `#00E5FF` (electric cyan)
+- Losses / negative: `#FF6B6B` (coral red)
+- Borders: `#333333` (dark gray)
+- Activity bars fill: `#555555`, empty: `#2591`
+
+### Sparklines
+Use Unicode block elements: `\u2581\u2582\u2583\u2584\u2585\u2586\u2587\u2588`
+- Sample down to target width
+- Scale to [min, max] of series
+- Inline after numeric summary, not in separate panel
+
+## Anti-patterns
+
+- **Building monitoring before the system works.** Do not create alerting, live dashboards, or cron polling before the underlying pipeline generates real data. Monitoring a broken system produces noise, not signal. See `07-SENTRY/README.md` deferred placeholder pattern.
+- **Over-explaining the dashboard.** Show the rendered output first. Explain only if asked. The user wants to see data, not read a design document.
+- **Web stack for v0.** No Flask, Streamlit, or React for the first iteration. Terminal is faster to iterate and matches the user's CRT-phosphor aesthetic preference.
+- **Hard-coding `python` on macOS.** Always use `python3` — the `python` binary is often missing on macOS even when Python 3 is installed.
+- **Uniform random simulated data.** Do not seed with uniform or iid Gaussian. Use regime-conditional distributions: different mean/σ per category, Pareto left tails for known blow-up risks, and Markov-chain regime persistence (today's regime predicts tomorrow's). Otherwise the dashboard looks impressive but produces nonsense for capital allocation.
+
+## Desktop Packaging with Electron
+
+When the dashboard design is locked and the user wants a native app (dock icon, menu bar, no browser tab), package the HTML dashboard as a cross-platform Electron app.
+
+### When to package
+
+- User wants the dashboard in the dock / menu bar, not a localhost URL
+- Real-time data visualization with rich visuals and customizable themes
+- Cross-platform distribution (.dmg, .exe, .AppImage)
+- Embedded data proxy so no separate Python server is needed
+
+### Architecture
+
+```
+Electron (main.js)
+  ├── Embedded HTTP proxy (Node http.createServer)
+  │   ├── / → index.html (dashboard)
+  │   ├── /theme-builder.html → theme editor
+  │   └── /api/* → proxied to backend
+  ├── BrowserWindow (frameless or hiddenInset)
+  └── Tray icon with context menu
+```
+
+### Workflow
+
+1. **Build the HTML dashboard first** — Ensure it works standalone with `fetch('/api/...')`
+2. **Move colors to CSS custom properties** — Use `data-theme` attributes on `<html>` for instant theme switching
+3. **Add a theme builder (optional)** — Color pickers + live iframe preview via `postMessage`
+4. **Write `main.js`** — `http.createServer` for embedded proxy, `BrowserWindow` with `titleBarStyle: 'hiddenInset'`
+5. **Configure `package.json`** — `electron-builder` targets for mac (dmg+zip), win (nsis+portable), linux (AppImage+deb)
+6. **Generate icon** — Python PIL script if no designer asset available (see `references/electron-icon-generation.md`)
+7. **Build & release** — `npx electron-builder --mac --win --linux`, then `gh release create`
+
+### Theme system
+
+All visual differences are CSS variables (`--bg`, `--cyan`, `--red`, etc.). Switch with:
+
+```javascript
+document.documentElement.setAttribute('data-theme', name);
+localStorage.setItem('theme', name);
+```
+
+Six complete skins are documented in `references/electron-theme-system.md` (Phosphor, Cyberpunk, Military, Amber, Matrix, Minimal).
+
+### CRT effects (optional atmosphere)
+
+Pure CSS `pointer-events: none` overlays:
+- **Scanlines** — `body::before` with `repeating-linear-gradient`
+- **Vignette** — `body::after` with `radial-gradient`
+- **Glow text** — `text-shadow` scaled by `--glow-intensity` variable
+- **Flicker** — `@keyframes flicker` on borders or live indicators
+
+See `references/electron-crt-effects.md` for full CSS snippets.
+
+### Anti-patterns
+
+- **Don't** build a separate backend server — embed the proxy in `main.js`
+- **Don't** use `Math.random()` for decorative waveforms — compute real deltas from poll history
+- **Don't** make the whole page scroll — each panel scrolls independently with `overflow-y: auto`
+- **Don't** use rounded cards or Inter font for terminal-brutalist aesthetic — monospace + 1px borders + sharp corners
+
+## Templates
+
+- `templates/flux_report.py` — Starter dashboard with rich + sqlite + sparklines + CSV export. Copy and modify for any domain.
+- `templates/electron-main.js` — Electron main process with embedded proxy + tray + window
+- `templates/electron-preload.js` — Secure IPC bridge (contextIsolation)
+- `templates/electron-theme-system.css` — Complete 6-skin theme stylesheet with CRT effects, glow scaling, switcher UI
+
+## References
+
+- See `references/rune-flux-report.md` for the trading-specific instance of the terminal dashboard pattern (2026-05-21).
+- `references/electron-builder-config.md` — Full `package.json` build config for cross-platform targets
+- `references/electron-proxy-server.md` — Embedded Node.js proxy pattern with CORS handling
+- `references/electron-crt-effects.md` — Scanline, vignette, glow, flicker CSS
+- `references/electron-icon-generation.md` — Python PIL script for programmatic 512×512 app icons + macOS `.icns`
+- `references/electron-theme-system.md` — CSS custom properties + `data-attribute` theming architecture
+
+## Related Skills
+
+- `design-system-evaluation` — Verify dashboard CSS aligns with canonical tokens
+- `web-dev-ops` — Web development projects, static export, deployment
+- `claude-design` — One-off HTML artifacts (landing pages, prototypes)

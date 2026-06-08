@@ -1,0 +1,66 @@
+{
+  "name": "finra",
+  "version": "1.0.0",
+  "framework": "FINRA",
+  "description": "Communication archiving and supervisory review guardrails for broker-dealer workflows.",
+  "guard": {
+    "mode": "block",
+    "redact_fields": [
+      "account_number",
+      "social_security_number"
+    ],
+    "max_output_bytes": 4096
+  },
+  "rules": [
+    {
+      "id": "finra_unsupervised_communication",
+      "type": "pattern",
+      "category": "communication",
+      "severity": "critical",
+      "match": "\\b(SEND|SMTP|SMTP CLIENT|EMAIL CLIENT|SMS|TEXT).+(customer|client|prospect)",
+      "message": "Unsupervised outbound communication to regulated parties may violate FINRA 17a-4.",
+      "suggestion": "Post to supervisory review queue; do not send.",
+      "remediation_steps": [
+        "Queue message for principal review",
+        "Assign supervisory approval Jira ticket"
+      ]
+    },
+    {
+      "id": "finra_retention_violation",
+      "type": "pattern",
+      "category": "retention",
+      "severity": "high",
+      "match": "\\b(DELETE|PURGE|shred|rm\\s+-rf)\\b.*\\b(email|message|chat|communication|archive)\\b",
+      "message": "Communication deletion blocked by FINRA retention requirements.",
+      "suggestion": "Retain all communications for 6 years under WORM archival."
+    },
+    {
+      "id": "finra_unsolicited_advertising",
+      "type": "pattern",
+      "category": "marketing",
+      "severity": "high",
+      "match": "\\b(unsubscribe|opt-out|do not contact)\\b",
+      "message": "Recipient preference may be ignored.",
+      "suggestion": "Confirm CAN-SPAM and FINRA 2210 consent status before sending."
+    },
+    {
+      "id": "finra_mobile_device_alert",
+      "type": "pattern",
+      "category": "mobile",
+      "severity": "medium",
+      "match": "\\b(push notification|in-app message|sms|text alert)\\b.*\\b(client|customer|retail)\\b",
+      "message": "Mobile communication may fail supervisory review capture.",
+      "suggestion": "Copy mobile messages to supervised archive."
+    }
+  ],
+  "exceptions": [],
+  "reporting": {
+    "formats": ["json", "txt"]
+  },
+  "tags": [
+    "finance",
+    "finra",
+    "broker-dealer",
+    "communications"
+  ]
+}

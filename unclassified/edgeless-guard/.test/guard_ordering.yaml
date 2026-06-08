@@ -1,0 +1,27 @@
+
+mode: enforce
+rules:
+  - id: Q1
+    targets: {actions: ["store"], domains: ["batched"]}
+    action: warn
+    framework: test
+    jurisdiction: N/A
+    level: primary
+  - id: Q2
+    targets: {actions: ["store"], domains: ["batched"]}
+    action: block
+    framework: test
+    jurisdiction: N/A
+    level: secondary
+  - id: Q3
+    targets: {actions: ["store"], domains: ["batched"]}
+    action: warn
+    framework: test
+    jurisdiction: N/A
+    level: tertiary
+  - id: Q4
+    targets: {actions: ["store"], domains: ["batched"]}
+    action: require_human
+    framework: test
+    jurisdiction: N/A
+    level: quaternary

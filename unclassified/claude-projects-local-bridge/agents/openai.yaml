@@ -1,0 +1,4 @@
+interface:
+  display_name: "Claude Projects Bridge"
+  short_description: "Use local .claude skills and agents safely"
+  default_prompt: "Use the local Claude Code setup in this repo without modifying the originals."

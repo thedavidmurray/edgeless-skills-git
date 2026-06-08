@@ -1,0 +1,1471 @@
+---
+name: paperclip-fleet-analyzer
+description: Analyze Paperclip agent fleet health, backlog distribution, and skill gaps. Generate automated reports, create tracking issues, and notify Discord. Runs as cron job or on-demand.
+version: 1.0.0
+author: Hermes
+metadata:
+  hermes:
+    tags: [paperclip, agent-orchestration, fleet-health, backlog-analysis, cron, skill-gaps]
+
+---
+
+# Paperclip Fleet Analyzer
+
+Comprehensive analysis of Paperclip agent fleet: backlog distribution, assignment gaps, skill needs detection, and automated issue creation.
+
+## When to Use
+
+- **Manual organization audit** — User asks "check Paperclip org", "review fleet status", "what needs attention" — comprehensive health assessment with actionable recommendations
+- **Nightly fleet health check** — Run as cron to monitor agent utilization
+- **Backlog triage** — Identify unassigned high-priority items
+- **Skill gap analysis** — Detect patterns in backlog that indicate missing skills
+- **Assignment optimization** — Find idle agents and match to pending work
+- **Blocked work identification** — Find issues stuck on external dependencies (auth, access, etc.)
+- **Daily alignment report** — Recurring cron-run health snapshot: fleet + backlog + cron + auth + blocked work. See [`references/daily-alignment-workflow.md`](references/daily-alignment-workflow.md) for the full end-to-end workflow.
+
+## Prerequisites
+
+```bash
+# Paperclip running on localhost:3100 (local_trusted mode)
+# Discord webhook for notifications
+# Python 3 with urllib, json, subprocess
+```
+
+## Configuration
+
+```python
+PAPERCLIP_URL = "http://127.0.0.1:3100"
+COMPANY_ID = "your-company-uuid"
+DISCORD_WEBHOOK = "https://discord.com/api/webhooks/..."
+```
+
+## Core Functions
+
+### 1. Fetch Fleet State
+
+```python
+def api_get(path):
+    """GET from Paperclip API (no auth needed for localhost)"""
+    url = f"{PAPERCLIP_URL}/api/{path}"
+    with urllib.request.urlopen(url, timeout=10) as resp:
+        return json.loads(resp.read().decode())
+
+# Usage
+agents = api_get(f"companies/{COMPANY_ID}/agents")
+issues = api_get(f"companies/{COMPANY_ID}/issues")
+```
+
+### 2. Detect Orphaned Issues (Issues Assigned to Dead Agents)
+
+```python
+def detect_orphaned_issues(issues, agents):
+    """Find issues assigned to agents that no longer exist or are terminated"""
+    existing_ids = {a['id'][:8] for a in agents}
+    
+    orphaned = []
+    for i in issues:
+        if i.get('status') not in ('done', 'cancelled'):
+            aid = i.get('assigneeAgentId', '')
+            if aid and aid[:8] not in existing_ids:
+                orphaned.append({
+                    'id': i['identifier'],
+                    'title': i['title'][:50],
+                    'status': i['status'],
+                    'orphaned_assignee': aid[:8],
+                    'priority': i.get('priority', 'unknown')
+                })
+    
+    return orphaned
+
+# Usage
+orphaned = detect_orphaned_issues(issues, agents)
+if orphaned:
+    print(f"⚠️ Found {len(orphaned)} orphaned issues assigned to dead agents")
+    for o in orphaned[:10]:
+        print(f"  {o['id']} | {o['status']:<12} | {o['title']}")
+```
+
+### 3. Identify Blocked Work
+
+```python
+def identify_blocked_work(issues, blocked_keywords=None):
+    """Find issues likely blocked on external dependencies"""
+    if blocked_keywords is None:
+        blocked_keywords = [
+            'blocked', 'auth', 'authentication', 'login', 'credential',
+            'ssh', 'vps', 'notebooklm', 'expired', 'token', 'api key'
+        ]
+    
+    blocked = []
+    for i in issues:
+        if i.get('status') in ('in_progress', 'todo', 'backlog'):
+            text = (i.get('title', '') + ' ' + str(i.get('description', ''))).lower()
+            matches = [k for k in blocked_keywords if k in text]
+            if matches:
+                blocked.append({
+                    'id': i['identifier'],
+                    'title': i['title'][:50],
+                    'status': i['status'],
+                    'blocked_on': matches,
+                    'assignee': i.get('assigneeAgentId', 'UNASSIGNED')[:8]
+                })
+    
+    return blocked
+
+# Group by blocker type for action planning
+from collections import Counter
+def group_by_blocker(blocked_issues):
+    blocker_types = Counter()
+    for b in blocked_issues:
+        primary = b['blocked_on'][0] if b['blocked_on'] else 'unknown'
+        blocker_types[primary] += 1
+    return blocker_types
+```
+
+### 4. Comprehensive Agent Workload Analysis
+
+```python
+def analyze_backlog(issues, agents):
+    """Categorize backlog by status, priority, assignment"""
+    agent_map = {a['id']: a['name'] for a in agents}
+    
+    status_counts = Counter()
+    priority_counts = Counter()
+    assignee_counts = Counter()
+    backlog_items = []
+    
+    for issue in issues:
+        status = issue.get('status', 'unknown')
+        priority = issue.get('priority', 'unknown')
+        assignee = agent_map.get(issue.get('assigneeAgentId'), 'Unassigned')
+        
+        status_counts[status] += 1
+        priority_counts[priority] += 1
+        assignee_counts[assignee] += 1
+        
+        if status in ['backlog', 'todo']:
+            backlog_items.append(issue)
+    
+    return {
+        'total': len(issues),
+        'backlog_count': len(backlog_items),
+        'unassigned': len([i for i in backlog_items if not i.get('assigneeAgentId')]),
+        'high_priority_unassigned': len([i for i in backlog_items 
+            if not i.get('assigneeAgentId') and i.get('priority') in ['high', 'critical']]),
+        'status_breakdown': dict(status_counts),
+        'priority_breakdown': dict(priority_counts),
+        'agent_workload': dict(assignee_counts)
+    }
+```
+
+### 3. Detect Skill Gaps from Backlog
+
+```python
+def detect_skill_needs(backlog_issues):
+    """Analyze backlog text to identify skill gaps"""
+    skill_requests = Counter()
+    
+    for issue in backlog_issues:
+        title = issue.get('title', '').lower()
+        desc = (issue.get('description') or '').lower()
+        text = title + ' ' + desc
+        
+        # MCP/Integration skills
+        if any(k in text for k in ['mcp', 'api', 'integration', 'webhook', 
+                                    'server', 'bridge', 'adapter']):
+            skill_requests['mcp_builder'] += 1
+        
+        # Trading automation
+        if any(k in text for k in ['pine', 'tradingview', 'backtest', 
+                                    'strategy', 'indicator']):
+            skill_requests['trading_automation'] += 1
+        
+        # YouTube/content pipeline
+        if any(k in text for k in ['youtube', 'transcript', 'summarize', 
+                                    'video', 'ingest']):
+            skill_requests['youtube_pipeline'] += 1
+        
+        # Generative art
+        if any(k in text for k in ['plotter', 'art', 'generative', 'svg', 
+                                    'creative', 'design', 'visual']):
+            skill_requests['generative_art'] += 1
+        
+        # Vector/RAG
+        if any(k in text for k in ['chroma', 'vector', 'embedding', 'rag', 
+                                    'semantic', 'search', 'knowledge']):
+            skill_requests['vector_db'] += 1
+        
+        # Messaging/notifications
+        if any(k in text for k in ['discord', 'telegram', 'notify', 
+                                    'bot', 'alert', 'messaging']):
+            skill_requests['messaging'] += 1
+        
+        # Automation/scheduling
+        if any(k in text for k in ['cron', 'schedule', 'pipeline', 
+                                    'automation', 'nightly', 'heartbeat']):
+            skill_requests['cron_automation'] += 1
+    
+    return skill_requests
+```
+
+### 4. Generate Skill Recommendations
+
+```python
+def generate_recommendations(skill_requests, error_patterns=None):
+    """Convert detected patterns to skill recommendations"""
+    recommendations = []
+    
+    if skill_requests.get('mcp_builder', 0) >= 3:
+        recommendations.append({
+            'skill': 'mcp-server-scaffold',
+            'reason': f"{skill_requests['mcp_builder']} items need MCP integrations",
+            'priority': 'high' if skill_requests['mcp_builder'] >= 5 else 'medium'
+        })
+    
+    if skill_requests.get('trading_automation', 0) >= 2:
+        recommendations.append({
+            'skill': 'tradingview-pine-automation',
+            'reason': f"{skill_requests['trading_automation']} trading tasks pending automation",
+            'priority': 'high'
+        })
+    
+    if skill_requests.get('generative_art', 0) >= 2:
+        recommendations.append({
+            'skill': 'pen-plotter-driver',
+            'reason': f"{skill_requests['generative_art']} art/plotter tasks indicate skill gap",
+            'priority': 'medium'
+        })
+    
+    if skill_requests.get('cron_automation', 0) >= 3:
+        recommendations.append({
+            'skill': 'cron-pipeline-manager',
+            'reason': f"{skill_requests['cron_automation']} scheduling tasks need cron skill",
+            'priority': 'medium'
+        })
+    
+    # Error-based recommendations
+    if error_patterns and error_patterns.get('missing_tool/skill', 0) >= 3:
+        recommendations.append({
+            'skill': 'tool-discovery-bridge',
+            'reason': f"{error_patterns['missing_tool/skill']} 'not found' errors detected",
+            'priority': 'high'
+        })
+    
+    return recommendations
+```
+
+### 5. Discord Notification (Curl Fallback)
+
+```python
+def post_discord_webhook(content, embeds=None, webhook_url=None):
+    """Post to Discord via curl (avoids SSL issues in cron context)"""
+    import subprocess
+    
+    payload = {
+        "username": "Fleet-Analyzer",
+        "content": content,
+        "embeds": embeds or []
+    }
+    
+    result = subprocess.run(
+        ['curl', '-s', '-X', 'POST', webhook_url or DISCORD_WEBHOOK,
+         '-H', 'Content-Type: application/json',
+         '-d', json.dumps(payload)],
+        capture_output=True, text=True, timeout=30
+    )
+    
+    if result.returncode != 0:
+        print(f"Discord post failed: {result.stderr}")
+    return result.returncode == 0
+```
+
+### 6. Create Paperclip Issues (with Deduplication)
+
+```python
+def create_skill_establishment_issue(skill_name, reason, priority="medium", 
+                                     assignee=None, existing_issues=None):
+    """Create Paperclip issue for skill establishment with dedup check"""
+    
+    # Check for duplicates
+    if existing_issues:
+        dup_title = f"Establish Skill: {skill_name}"
+        existing_titles = {i.get('title', '') for i in existing_issues 
+                          if 'Establish Skill:' in i.get('title', '')}
+        if dup_title in existing_titles:
+            return {"skipped": True, "reason": "duplicate"}
+    
+    payload = {
+        "title": f"Establish Skill: {skill_name}",
+        "description": f"**Auto-generated from fleet analysis**\n\n{reason}\n\n" +
+                      "**Recommended approach:**\n" +
+                      "1. Check skills hub for existing solutions\n" +
+                      "2. Scaffold new skill if gap confirmed\n" +
+                      "3. Test with 2-3 backlog tasks\n" +
+                      "4. Document and register",
+        "priority": priority,
+        "status": "todo",
+        "companyId": COMPANY_ID
+    }
+    
+    if assignee:
+        payload["assigneeAgentId"] = assignee
+    
+    url = f"{PAPERCLIP_URL}/api/companies/{COMPANY_ID}/issues"
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode(),
+        headers={'Content-Type': 'application/json'}
+    )
+    
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        return json.loads(resp.read().decode())
+```
+
+## Five Failure Patterns Framework
+
+When investigating fleet stalls (agents idle but velocity near-zero), apply the framework in [`references/five-failure-patterns-framework.md`](references/five-failure-patterns-framework.md):
+
+| Pattern | Signature | Unblock Action |
+|---------|-----------|----------------|
+| **1. Auth Vortex** | 8-20+ tickets, same auth keyword | One manual auth step (5 min) |
+| **2. Dependency Failure** | Package installed but pipeline broken | Actually run integration end-to-end |
+| **3. Noise Cascade** | Bots looping, alert fatigue | Add cooldowns, suppress errors |
+| **4. Gap Ticketing** | Same skill gap in 5+ tickets | Stop ticketing, build the skill |
+| **5. Hardware Block** | "David at machine", no ETA | Close tickets, reopen when ready |
+| **6. API Contract Drift** | Fleet idle, backend healthy, old routes 400/404 | Update client routes + status taxonomy |
+
+**Session-specific pitfall log:** [`references/backlog-audit-pitfalls-2026-05-12.md`](references/backlog-audit-pitfalls-2026-05-12.md) — covers `originKind` recovery detection, alive-vs-total counting, terminal-state 500 errors, and comment-as-proxy patterns from the 2026-05-12 250-issue audit.
+
+## Manual Audit Workflow (Interactive)
+
+When user asks "check Paperclip org", "review fleet status", or "what needs attention":
+
+**Discord bot swarm audits:** If the audit involves Discord bot noise/silence, bot-to-bot loops, Paperclip/Discord routing confusion, OpenAI OAuth profile drift, Telegram persistence after migration, or questions like "why are the bots broken", also use `references/discord-bot-swarm-audit-pattern.md`. That reference covers cross-layer checks: Paperclip intent vs Hermes runtime, cron/provider budget failures, direct Discord posting scripts, envelope/author identity mismatches, notification-only dispatchers, profile channel directories, and capability registry design.
+
+### Agent Detail Endpoints
+
+Paperclip supports **two** agent lookup patterns:
+
+```bash
+# ✅ Method 1: Direct UUID lookup (works, returns full record)
+curl -s "http://127.0.0.1:3100/api/agents/$AGENT_UUID" | \
+  python3 -c "import sys,json; d=json.load(sys.stdin); print(d['name'], d['status'], d['adapterConfig']['model'])"
+
+# ✅ Method 2: Company-scoped list filtered by query param (also works)
+curl -s "http://127.0.0.1:3100/api/companies/$COMPANY_ID/agents?agentId=$AGENT_UUID" | \
+  python3 -c "import sys,json; d=json.load(sys.stdin); a=d[0] if d else None; print(a['name'] if a else 'not found')"
+
+# ❌ Method 3: Company-scoped path-based ID (returns 404)
+curl -s "http://127.0.0.1:3100/api/companies/$COMPANY_ID/agents/$AGENT_UUID"
+# {"error":"API route not found"}
+```
+
+**Prefer Method 1** for single-agent lookups — it's simpler and returns the full record directly.
+
+**Use Method 2** when you need to enumerate or filter agents (e.g., by status, by role).
+
+**Workaround for list filtering:**
+```python
+agents = api_get(f"companies/{COMPANY_ID}/agents")
+target = [a for a in agents if a["id"] == AGENT_ID][0]
+```
+
+### Phase 1: Fleet Overview
+
+```bash
+# Get complete fleet state
+echo "=== AGENT FLEET STATUS ===" 
+curl -s "http://127.0.0.1:3100/api/companies/$COMPANY_ID/agents" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+agents = sorted(d, key=lambda x: x.get('status',''))
+for a in agents:
+    print(f\"{a['id'][:8]} | {a['name'][:20]:<20} | {a.get('status','unknown'):<12} | {a.get('adapterType','unknown'):<15}\")
+"
+```
+
+### Phase 2: Issue Summary by Status
+
+```bash
+echo "=== ISSUE SUMMARY ==="
+curl -s "http://127.0.0.1:3100/api/companies/$COMPANY_ID/issues" | python3 -c "
+import sys, json
+from collections import Counter
+d = json.load(sys.stdin)
+statuses = Counter(i.get('status','unknown') for i in d)
+for s, c in sorted(statuses.items(), key=lambda x: -x[1]):
+    print(f\"  {s}: {c}\")
+"
+```
+
+### Phase 3: Orphaned Issue Detection
+
+```bash
+echo "=== ORPHANED ISSUES (assigned to dead agents) ==="
+curl -s "http://127.0.0.1:3100/api/companies/$COMPANY_ID/agents" > /tmp/agents.json
+curl -s "http://127.0.0.1:3100/api/companies/$COMPANY_ID/issues?limit=300" > /tmp/issues.json
+
+python3 << 'EOF'
+import json
+agents = json.load(open('/tmp/agents.json'))
+issues = json.load(open('/tmp/issues.json'))
+existing = {a['id'][:8] for a in agents}
+
+orphans = [i for i in issues 
+           if i.get('assigneeAgentId') 
+           and i.get('assigneeAgentId')[:8] not in existing
+           and i.get('status') not in ('done','cancelled')]
+
+print(f"Found {len(orphans)} orphaned active issues")
+for o in orphans[:15]:
+    print(f\"  {o['identifier']} | {o['status']:<12} | {o['title'][:45]}\")
+EOF
+```
+
+### Phase 4: Blocked Work Identification
+
+```bash
+echo "=== BLOCKED WORK (likely external dependencies) ==="
+python3 << 'EOF'
+import json
+issues = json.load(open('/tmp/issues.json'))
+blocked_keywords = ['notebooklm', 'auth', 'ssh', 'vps', 'login', 'expired', 'token']
+
+blocked = []
+for i in issues:
+    if i.get('status') in ('in_progress', 'todo', 'backlog'):
+        text = (i.get('title','') + ' ' + str(i.get('description',''))).lower()
+        matches = [k for k in blocked_keywords if k in text]
+        if matches:
+            blocked.append({
+                'id': i['identifier'],
+                'title': i['title'][:45],
+                'status': i['status'],
+                'on': matches[0]
+            })
+
+print(f"Found {len(blocked)} potentially blocked issues")
+for b in blocked[:15]:
+    print(f\"  {b['id']} | {b['status']:<12} | blocked on: {b['on']:<12} | {b['title']}\")
+EOF
+```
+
+### Gateway Log Diagnostic Fingerprints
+
+When agents show `error` in Paperclip but the root cause isn't obvious from issue titles, grep gateway logs for these signatures. This is faster than re-running API probes and reveals auth, token-conflict, and platform-specific failures.
+
+```bash
+# Run from host where gateways execute
+for profile in hive scribe builder edgeless-cc ombudsman beau trader specimen critic; do
+  log="$HOME/.hermes/profiles/$profile/logs/gateway.log"
+  if [ -f "$log" ]; then
+    err=$(grep -iE "error|fail|401|403|disconnect|rate.limit|token|timeout|conflict" "$log" 2>/dev/null | tail -1)
+    [ -n "$err" ] && echo "[$profile] $err"
+  fi
+done
+```
+
+| Log Pattern | Meaning | Unblock Action |
+|-------------|---------|----------------|
+| `Discord bot token already in use (PID ...)` | Another gateway process holds the token | `kill -9 <PID>` the conflicting process, restart gateway |
+| `discord connect timed out after 30s` | Discord API unreachable or token invalid | Verify token at Discord Developer Portal; check Discord API status |
+| `discord paused after N consecutive failures` | Gateway gave up retrying | Fix underlying issue, then `/platform resume discord` or `hermes gateway restart` |
+| `Conflict: terminated by other getUpdates request` | Multiple Telegram bot instances polling | `ps aux | grep hermes.*$profile` → kill duplicates |
+| `Gateway exiting cleanly: ... signal-initiated shutdown` | Graceful exit, usually systemd/monitor restart | Verify `Restart=on-failure` in systemd/LaunchAgent; check if Paperclip itself restarted |
+| `Gateway failed to connect any configured messaging platform` | All platform tokens/auth failing | Check every auth credential; likely systemic key expiry |
+| `Telegram polling conflict (N/3)` | Same Telegram token used by another process | Ensure only one gateway per bot token |
+
+**Cross-reference with process list:** A gateway process running (PID in `ps`) does NOT mean the platform is connected. Always correlate `ps` output with the latest gateway log line. If the last log line is a failure and the process is old, the agent is effectively dead despite having a PID.
+
+---
+
+### Cron Health Audit
+
+When `hermes cron list` shows errors, the TUI output can truncate long rows. Grep for these failure signatures:
+
+```bash
+hermes cron list 2>&1 | grep -E 'error:|Script not found|Discord API error|Next run:  \?'
+```
+
+| Pattern | Meaning | Unblock Action |
+|---------|---------|----------------|
+| `HTTP 429: The usage limit has been reached` | Provider quota exhausted during cron execution | Check provider dashboard; rotate key or switch model |
+| `Script exited with code 2` | Health probe detected critical degradation (e.g., 4 providers down) | Read the script's stdout for specific failures |
+| `Script not found:` | Cron references a path that no longer exists | Update cron script path |
+| `Discord API error (401)` | Bot token expired; no alerts reach Discord | Rotate Discord bot token |
+| `Next run:  ?` | Schedule parse failure or broken repeat interval | Recreate the cron job with valid schedule |
+
+**Auth health integration:** Check `claude-projects/logs/auth-health-YYYYMMDD.json` for cross-provider health snapshot. If the auth probe and the cron error both cite the same provider, it's a systemic provider failure, not a one-off script bug.
+
+**TUI truncation pitfall:** `hermes cron list` renders a formatted table. For programmatic parsing in scripts, use `hermes cron list` output directly and grep selectively. Do not assume you see all jobs in a single screenful.
+
+---
+
+### Phase 5: Agent Workload Analysis
+
+```bash
+echo "=== AGENT WORKLOAD (active issues only) ==="
+python3 << 'EOF'
+import json
+from collections import Counter
+
+agents = json.load(open('/tmp/agents.json'))
+issues = json.load(open('/tmp/issues.json'))
+agent_map = {a['id'][:8]: a['name'] for a in agents}
+
+workload = Counter()
+for i in issues:
+    if i.get('status') in ('backlog','todo','in_progress','blocked'):
+        aid = i.get('assigneeAgentId','UNASSIGNED')[:8]
+        workload[aid] += 1
+
+print("Agent Load (active statuses):")
+for aid, count in sorted(workload.items(), key=lambda x: -x[1]):
+    name = agent_map.get(aid, 'DEAD-AGENT')
+    print(f\"  {name[:20]:<20} | {count:>3} issues | {aid}\")
+EOF
+```
+
+### Phase 6: Strategic Recommendations
+
+Based on audit findings, produce prioritized action list:
+
+```markdown
+## PAPERCLIP ORG STATUS — {DATE}
+
+### Agent Fleet ({N} agents)
+| Agent | Status | Adapter | 
+|-------|--------|---------|
+...
+
+### 🚨 Critical Findings
+1. **Orphaned Issues:** {N} assigned to dead agents → Action: reassign
+2. **Blocked Work:** {N} issues on external auth → Action: reassign to vault-only
+3. **System Recovery:** {N} P0/P1 completed, {N} remaining
+
+### Recommendations
+| Priority | Action | Owner |
+|----------|--------|-------|
+| Immediate | Reassign orphaned issues | Fleet coordinator |
+| Short-term | Resolve auth blockers | User intervention |
+| This week | Audit stale in_progress | Builder/COO |
+```
+
+### Recovery Issue Detection and Bulk Cancellation
+
+**Primary method:** Filter by `originKind == 'stranded_issue_recovery'` — this is the canonical field Paperclip sets on auto-generated recovery duplicates. Do NOT rely solely on title matching (`Recover stalled issue`) since titles can be edited or localized.
+
+```python
+import json
+
+issues = json.load(open('/tmp/issues.json'))
+
+# Canonical recovery noise filter
+recovery = [i for i in issues if i.get('originKind') == 'stranded_issue_recovery']
+print(f"Recovery noise: {len(recovery)} total")
+
+# Distinguish alive from dead — CRITICAL for API behavior
+alive = [i for i in recovery if i.get('status') not in ('done', 'cancelled')]
+dead = [i for i in recovery if i.get('status') in ('done', 'cancelled')]
+print(f"  Alive (need cancellation): {len(alive)}")
+print(f"  Dead (already done/cancelled): {len(dead)}")
+
+# Why this matters: the API returns ALL issues across statuses.
+# "250 total issues" ≠ "250 open issues". Real alive backlog = total - done - cancelled.
+```
+
+**Bulk-commenting recovery issues (workaround for no bulk-close API):**
+
+Use the included script: `scripts/bulk-comment-recovery.py`
+
+Or inline Python:
+```python
+import requests, time
+
+for i in alive:
+    # ⚠️ Skip done/cancelled — POST /comments returns HTTP 500 on terminal-state issues
+    if i.get('status') in ('done', 'cancelled'):
+        continue
+    
+    r = requests.post(
+        f"{BASE}/issues/{i['id']}/comments",
+        json={"body": "Bulk audit: This recovery duplicate is noise. Parent issue remains open. Recommend canceling this ticket."},
+        headers={"Content-Type": "application/json"}
+    )
+    if r.status_code == 201:
+        print(f"✅ {i['identifier']}")
+    else:
+        print(f"❌ {i['identifier']}: HTTP {r.status_code}")
+    time.sleep(0.3)  # Rate limit safety
+```
+
+**Recovery Comment 500 Errors — Session Finding (2026-05-12):**
+
+When bulk-commenting recovery duplicates, issues with status `done` or `cancelled` consistently return HTTP 500. The API rejects comments on terminal-state issues. **Always filter by status before commenting.**
+
+Typical batch result: 73/77 alive commented successfully, 35 dead skipped (would 500), 4 already had comments.
+
+**Legacy title-based filter (fallback only):**
+```bash
+echo "=== SYSTEM RECOVERY STATUS ==="
+python3 << 'EOF'
+import json
+issues = json.load(open('/tmp/issues.json'))
+
+recovery = {'done': [], 'in_progress': [], 'todo': [], 'blocked': []}
+for i in issues:
+    title = i.get('title','').lower()
+    if any(k in title for k in ['system recovery', 'p0', 'p1', 'critical']):
+        status = i.get('status','unknown')
+        recovery.setdefault(status, []).append({
+            'id': i['identifier'],
+            'title': i['title'][:55],
+            'completed': i.get('completedAt') is not None
+        })
+
+for status, items in sorted(recovery.items()):
+    if items:
+        print(f"\n{status.upper()}: {len(items)} issues")
+        for item in items[:10]:
+            done = "✅" if item['completed'] else "⏳"
+            print(f"  {done} {item['id']} | {item['title']}")
+EOF
+```
+
+---
+
+## Automated Audit (Cron)
+
+```python
+def run_fleet_analysis():
+    """Complete fleet health analysis workflow"""
+    
+    # 1. Fetch data
+    agents = api_get(f"companies/{COMPANY_ID}/agents")
+    issues = api_get(f"companies/{COMPANY_ID}/issues")
+    agent_map = {a['id']: a['name'] for a in agents}
+    
+    # 2. Analyze backlog
+    backlog = analyze_backlog(issues, agents)
+    
+    # 3. Detect skill needs
+    backlog_items = [i for i in issues if i.get('status') in ['backlog', 'todo']]
+    skill_requests = detect_skill_needs(backlog_items)
+    
+    # 4. Generate recommendations
+    recommendations = generate_recommendations(skill_requests)
+    
+    # 5. Build Discord embeds
+    embeds = [{
+        "title": f"📊 Fleet Analysis — {datetime.now().strftime('%Y-%m-%d')}",
+        "description": f"**Backlog:** {backlog['backlog_count']} items\n" +
+                      f"**Unassigned:** {backlog['unassigned']} ({backlog['unassigned']/max(backlog['backlog_count'],1)*100:.0f}%)\n" +
+                      f"**High-priority idle:** {backlog['high_priority_unassigned']}",
+        "color": 15548997 if backlog['high_priority_unassigned'] > 5 else 5763719,
+        "fields": [
+            {"name": "🎯 Skill Needs", "value": 
+             '\n'.join([f"{k}: {v}" for k, v in skill_requests.most_common(5)]) 
+             or "None detected", "inline": True},
+            {"name": "👤 Agent Load", "value": 
+             '\n'.join([f"{k}: {v}" for k, v in list(backlog['agent_workload'].items())[:5]]), 
+             "inline": True}
+        ]
+    }]
+    
+    if recommendations:
+        rec_text = '\n'.join([f"**{r['priority'].upper()}** — `{r['skill']}`\n{r['reason']}" 
+                              for r in recommendations[:3]])
+        embeds.append({
+            "title": "🔧 Skill Establishment Recommendations",
+            "description": rec_text,
+            "color": 15548997 if any(r['priority'] == 'high' for r in recommendations) else 3447003
+        })
+    
+    # 6. Post to Discord
+    post_discord_webhook(
+        f"🌙 **Fleet Analysis Complete** — {datetime.now().strftime('%H:%M')}",
+        embeds
+    )
+    
+    # 7. Create Paperclip issues for high-priority skills
+    builder = next((a for a in agents if a['name'] == 'Builder'), None)
+    for rec in recommendations:
+        if rec['priority'] == 'high':
+            result = create_skill_establishment_issue(
+                rec['skill'], rec['reason'], 
+                priority='high',
+                assignee=builder['id'] if builder else None,
+                existing_issues=issues
+            )
+            print(f"Issue for {rec['skill']}: {result.get('id', result.get('reason', 'error'))}")
+    
+    return {
+        'backlog_stats': backlog,
+        'skill_requests': dict(skill_requests),
+        'recommendations': len(recommendations)
+    }
+```
+
+## Cron Setup
+
+```bash
+# Add to crontab for nightly runs at 2 AM
+0 2 * * * /usr/bin/python3 ~/.hermes/scripts/nightly-skill-review.py >> /tmp/fleet-analysis.log 2>&1
+
+# Or use Hermes cron system
+hermes cron create --name fleet-analysis --schedule "0 2 * * *" \
+  --script fleet-analyzer.py
+```
+
+## Output Examples
+
+### Discord Embed Structure
+- **Fleet Overview**: Agent count, backlog size, unassigned %
+- **Skill Needs**: Detected patterns (MCP, trading, art, etc.)
+- **Recommendations**: Prioritized skill establishment tasks
+- **Agent Workload**: Who's busy, who's idle
+
+### Paperclip Issues Created
+- `Establish Skill: mcp-server-scaffold` (high priority, assigned to Builder)
+- `Establish Skill: tradingview-pine-automation` (high priority)
+- `Establish Skill: pen-plotter-driver` (medium priority)
+
+## Common Patterns
+
+### Find Idle Agents
+```python
+idle_agents = [a for a in agents if a.get('status') == 'idle']
+agent_workload = Counter()
+for issue in issues:
+    if issue.get('assigneeAgentId') and issue.get('status') in ['backlog', 'todo']:
+        agent_workload[issue['assigneeAgentId']] += 1
+
+# Agents with 0 assigned work
+available = [a for a in idle_agents 
+             if agent_workload.get(a['id'], 0) == 0]
+```
+
+### Thematic Backlog Analysis
+```python
+themes = {
+    'Trading/Pamela': ['pamela', 'trading', 'pine', 'tradingview'],
+    'MCP/Integrations': ['mcp', 'api', 'integration', 'webhook'],
+    'Knowledge/Pipeline': ['youtube', 'notebooklm', 'obsidian', 'chroma'],
+    'Agent Infrastructure': ['agent', 'paperclip', 'org', 'swarm'],
+    'Products/Revenue': ['ios', 'app', 'gumroad', 'product']
+}
+
+theme_counts = Counter()
+for issue in backlog:
+    text = (issue.get('title', '') + ' ' + issue.get('description', '')).lower()
+    for theme, keywords in themes.items():
+        if any(k in text for k in keywords):
+            theme_counts[theme] += 1
+```
+
+### Agent Error Deep-Diagnosis: From "Adapter Failed" to Root Cause
+
+When agents show `error` in Paperclip but the root cause is unclear, do NOT stop at the status field. The Paperclip UI and agent status only show "Adapter failed" or "timed_out" — the actual error (provider quota, auth expiry, model deprecation) is buried in Hermes run logs. Follow the evidence chain.
+
+**Evidence chain (outer → inner):**
+
+| Layer | Location | What it tells you |
+|-------|----------|-------------------|
+| Paperclip status | `agents.status` | `error`, `running`, `idle` — surface signal only |
+| Runtime state | `agent_runtime_state.last_error` | Sometimes empty; rarely the real error |
+| Wakeup requests | `agent_wakeup_requests.error` | "Adapter failed" — still generic |
+| Heartbeat runs | `heartbeat_runs.error` + `stderr_excerpt` | Stack trace, may show Hermes-level failure |
+| Run logs | `~/.paperclip/.../run-logs/{cid}/{agent_id}/{run_id}.ndjson` | **Canonical source** — full Hermes stdout/stderr |
+
+**Diagnostic query (Postgres direct — works even when REST API is hung):**
+```python
+import psycopg2
+conn = psycopg2.connect(host='127.0.0.1', port=54329, database='paperclip', user='paperclip')
+cur = conn.cursor()
+
+# Get recent failed runs with stderr for all error-status agents
+cur.execute("""
+    SELECT a.name, h.status, h.error, h.stderr_excerpt, h.started_at
+    FROM heartbeat_runs h
+    JOIN agents a ON h.agent_id = a.id
+    WHERE a.status = 'error'
+      AND h.started_at > NOW() - INTERVAL '6 hours'
+    ORDER BY h.started_at DESC
+""")
+```
+
+**Reading run-log ndjson files:**
+```bash
+# Find the most recent run log for an agent
+find ~/.paperclip/instances/default/data/run-logs/${CID}/${AGENT_ID}/ \
+  -name "*.ndjson" -mmin -120 | sort | tail -1
+
+# Read it — each line is a JSON object with ts, stream (stdout|stderr), chunk
+cat <file>.ndjson | python3 -m json.tool | head -30
+```
+
+**Common root-cause signatures in ndjson stdout:**
+
+| Signature | Meaning | Fix |
+|-----------|---------|-----|
+| `HTTP 429: The usage limit has been reached` | Provider quota exhausted (Fireworks, OpenAI, Anthropic) | Check provider dashboard; switch agents to alternate provider/model |
+| `Claude run failed: Credit balance is too low` | Anthropic credits depleted | Top up Anthropic billing or switch to OpenRouter-backed Claude |
+| `openai.RateLimitError` | OpenAI tier limit hit | Back off, check usage dashboard, or rotate to alternate key |
+| `Connection refused` / `ECONNREFUSED` | Hermes can't reach provider endpoint | Network issue or provider outage; verify base_url |
+| `API call failed after N retries` | Transient provider failure exhausted retry budget | Usually resolves when provider recovers; monitor for persistence |
+
+**Mass error status discrepancy:**
+- Agents with identical failure rates may show different Paperclip statuses (`error` vs `idle` vs `running`)
+- Paperclip's status flip requires a sustained failure streak before marking `error`
+- **Action:** Don't trust `status=idle` as healthy if the agent's recent heartbeat runs are all failing
+
+**Provider quota collapse detection:**
+1. All `hermes_local` agents on the same model fail simultaneously
+2. Agents on alternate models (different provider) remain healthy
+3. ndjson stdout shows `HTTP 429` across multiple agents
+4. **Kilo config drift check:** Verify Kilo's adapter_config uses his designated model (Codex/OpenAI), not the same model as coordinator agents. Kilo burning Kimi quota instead of Codex quota is a double failure.
+
+**Cascading provider failure signature (Beau pattern — 2026-05-27):**
+When the primary provider returns auth_error and the fallback hits quota:
+```
+Primary provider (e.g., Fireworks/custom → Kimi K2.6) → HTTP 403 auth_error
+Fallback provider (e.g., Gemini) → HTTP 429 free-tier quota exhausted (limit: 0)
+Result: Every run fails immediately; run logs are ~1.6KB (instant failure)
+Heartbeats continue because the polling loop is separate from execution
+```
+**Detection:** Check auth health log (`claude-projects/logs/auth-health-YYYYMMDD.json`) for cross-provider confirmation. If the auth probe shows the same provider as `auth_error` or `down`, it's a systemic provider failure, not agent-specific.
+
+**Fix priority:**
+1. Rotate primary provider API key
+2. Switch fallback to a healthy paid provider (check auth probe for which)
+3. Mass-clear agent `error` statuses after both providers are healthy
+
+### Direct Postgres Fallback When REST API is Unresponsive
+
+When the Paperclip REST API hangs (15s+ timeout, HTTP 000) or returns empty arrays for routes that should have data, bypass it and query the embedded PostgreSQL directly.
+
+**Why this happens:**
+- Large response serialization (hundreds of issues with full descriptions)
+- Log file bloat causing disk I/O saturation
+- Runaway agent loops creating wakeup request spam
+- API route migration that the client hasn't adapted to
+
+**Connection details (from `~/.paperclip/instances/default/config.json`):**
+| Parameter | Value |
+|-----------|-------|
+| Host | `127.0.0.1` (use IPv4, not `localhost` which may resolve to ::1) |
+| Port | `54329` (from `embeddedPostgresPort`) |
+| Database | `paperclip` |
+| User | `paperclip` (not `postgres` or `djm`) |
+| Auth | `trust` (local connections, no password needed) |
+
+**Schema discovery:**
+```python
+import psycopg2
+conn = psycopg2.connect(host='127.0.0.1', port=54329, database='paperclip', user='paperclip')
+cur = conn.cursor()
+
+# List tables
+cur.execute("SELECT table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name")
+
+# Columns for a specific table
+cur.execute("""
+    SELECT column_name FROM information_schema.columns
+    WHERE table_name = 'heartbeat_runs' ORDER BY ordinal_position
+""")
+```
+
+**Key tables for fleet diagnosis:**
+| Table | Purpose |
+|-------|---------|
+| `agents` | Agent registry: name, status, adapter_type, adapter_config, last_heartbeat_at |
+| `issues` | All issues: identifier, title, status, priority, assignee_agent_id |
+| `heartbeat_runs` | Every agent run: status, error, stderr_excerpt, stdout_excerpt, started_at |
+| `agent_runtime_state` | Per-agent state: last_error, state_json, total_cost_cents |
+| `agent_wakeup_requests` | Wakeup queue: status, error, requested_at |
+| `agent_task_sessions` | Task sessions: last_error, task_key |
+
+**Run-log file locations (local_disk storage):**
+```
+~/.paperclip/instances/default/data/run-logs/
+  {company_id}/
+    {agent_id}/
+      {run_id}.ndjson
+```
+
+**REST API vs Postgres fallback decision tree:**
+- API returns 200 with data → Use API (simpler, no SQL)
+- API returns 400/404 instantly → Route drift; test new routes, fall back to Postgres if needed
+- API hangs 10s+ or returns HTTP 000 → Postgres direct query
+- **API GET dead but POST works** → Event loop blocked on large response serialization (likely log file bloat). Use Postgres for reads, keep POST for comments. See `references/server-timeout-session-2026-06-02.md`
+- Need agent adapter_config parsing → Postgres (API doesn't expose full config in list view)
+- Need heartbeat run history → Postgres (API has no heartbeat_runs endpoint)
+
+### Server Performance Investigation (Timeout Diagnosis)
+
+When API calls are timing out or slow:
+
+### Phase 1: Check Log File Size
+
+```bash
+# Large log files slow disk I/O and response times
+ls -lh ~/.paperclip/instances/default/logs/server.log
+du -sh ~/.paperclip/instances/default/logs/
+
+# If >100MB, rotation may be broken — truncate or rotate
+tail -c 10M ~/.paperclip/instances/default/logs/server.log > /tmp/server.log.tmp
+mv /tmp/server.log.tmp ~/.paperclip/instances/default/logs/server.log
+```
+
+### Phase 2: Analyze Response Time Distribution
+
+```bash
+# Extract responseTime values from last N log entries
+tail -1000 ~/.paperclip/instances/default/logs/server.log 2>/dev/null \
+  | grep -o '"responseTime":[0-9]*' \
+  | sed 's/"responseTime"://' \
+  | sort -n | tail -20
+
+# Count slow responses (>1000ms)
+tail -5000 ~/.paperclip/instances/default/logs/server.log 2>/dev/null \
+  | grep -c '"responseTime":[1-9][0-9][0-9][0-9]'
+**Impact:** 68MB+ logs caused 596s response times (normal: ~200ms). Do not wait for 100MB — truncation should begin at 50MB. See [`references/server-timeout-session-2026-06-02.md`](references/server-timeout-session-2026-06-02.md) for full diagnostic path.
+
+**Updated thresholds:**
+| Log Size | Expected Impact | Action |
+|----------|----------------|--------|
+| <10MB | Normal (<500ms) | None |
+| 10-50MB | Slow (1-3s) | Monitor |
+| 50-100MB | Severe (5-60s) | Truncate |
+| >100MB | Critical (60s-600s+) | Truncate immediately |
+
+### Phase 3: Check Concurrent Agent Processes
+
+```bash
+# Too many concurrent agent processes = resource contention
+ps aux | grep -c "hermes.*chat.*-q"
+ps aux | grep "hermes chat" | wc -l
+
+# Check individual agent PIDs
+ps aux | grep -E "hermes.*chat" | grep -v grep | awk '{print $2, $11}'
+```
+
+### Phase 4: Database Connection Check
+
+```bash
+# Check PostgreSQL connections for Paperclip
+lsof -i :5432 2>/dev/null | grep postgres | wc -l
+
+# Check if Paperclip server has active DB connections
+lsof -p $(pgrep -f "paperclipai run") 2>/dev/null | grep postgres
+```
+
+---
+
+## API Contract & Status Taxonomy Drift Diagnosis
+
+When the entire fleet goes idle simultaneously (28 idle, 0 working) but the backend health endpoint reports `ok`, suspect **API contract drift** -- a route migration or status taxonomy change that broke every client at once.
+
+### Signature
+- Dashboard reports blockers that do not exist in the actual API
+- `status=open` returns `[]` despite visible work in the UI
+- Old routes return 400/404 instantly (not timeouts)
+- New company-scoped routes respond in <100ms
+- Backend health endpoint is fast and returns `ok`
+
+### Diagnostic Steps
+
+**Phase 1: Route compatibility probe**
+```bash
+# Old route -- should fail if migrated
+curl -s --max-time 3 "http://127.0.0.1:3100/api/issues?limit=1"
+# --> {"error":"Missing companyId in path. Use /api/companies/{companyId}/issues."}
+
+# New route -- should succeed
+curl -s --max-time 3 "http://127.0.0.1:3100/api/companies/$COMPANY_ID/issues?limit=1"
+# --> [{...issue...}]
+```
+
+**Phase 2: Progressive pagination threshold**
+```bash
+for n in 1 2 3 5 8 10 20 50; do
+  echo "limit=$n:"
+  curl -s --max-time 3 "${BASE}/companies/${CID}/issues?limit=$n" \
+    -w " TIME:%{time_total}s CODE:%{http_code}\n" | tail -1
+done
+```
+Purpose: Find where payload size causes timeouts. If `limit=10` works but `limit=20` hangs, the issue is response serialization, not the DB.
+
+**Phase 3: Status taxonomy enumeration**
+```bash
+# Test every known status value
+for s in open todo in_progress blocked backlog done cancelled; do
+  echo "status=$s:"
+  curl -s --max-time 3 "${BASE}/companies/${CID}/issues?limit=1&status=$s" \
+    -w " TIME:%{time_total}s\n" | tail -1
+done
+```
+If `status=open` returns `[]` instantly while `status=todo` returns data, the taxonomy has migrated.
+
+**Phase 4: Lightweight extraction with jq**
+```bash
+# Instead of full Python parsing, use jq for large arrays
+curl -s --max-time 4 "${BASE}/companies/${CID}/issues?limit=20" \
+  | jq -r '.[] | [.identifier, .status, .priority, .title[0:40]] | @tsv'
+```
+This avoids Python JSON parse overhead on massive response bodies.
+
+**Phase 5: Fleet agent status check**
+```bash
+curl -s --max-time 3 "${BASE}/companies/${CID}/agents" \
+  | jq -r '.[] | [.name, .status, .id[0:8]] | @tsv'
+```
+If most agents are `idle` with 1-2 `running`, and there are `todo` issues unclaimed, the problem is client-side (agents can't read the board), not server-side.
+
+### Root Cause Patterns
+
+| Pattern | Signature | Fix |
+|---------|-----------|-----|
+| **Route migration** | Old `/api/issues` --> 400; new `/api/companies/{cid}/issues` --> 200 | Update all agent client configs |
+| **Query param deprecation** | `/api/agents?limit=3` --> 404 "Unsupported query parameter" | Remove `limit` param; fetch all, filter client-side |
+| **Status taxonomy rename** | `status=open` --> `[]`; `status=todo` --> populated | Update all status filters in client code |
+| **Status removal** | `blocked` status no longer exists in taxonomy | Replace `blocked` checks with `in_progress` + keyword detection |
+
+### Recovery
+
+1. **Identify new canonical routes** by testing against Paperclip health endpoint docs
+2. **Update fleet client wrapper** -- if agents share a client library, patch one place
+3. **If no shared wrapper**, update each agent's config or environment variables
+4. **Re-enumerate statuses** -- map old --> new in all filters and queries
+5. **Verify**: After client update, agents should immediately begin claiming `todo` issues
+
+### Verification
+
+After fixing routes, confirm:
+```bash
+# Agents can now see work
+curl -s "${BASE}/companies/${CID}/issues?limit=5" \
+  | jq -r '.[] | select(.status == "todo") | .identifier' | wc -l
+# --> Should be > 0
+
+# Agents are no longer all idle
+curl -s "${BASE}/companies/${CID}/agents" \
+  | jq -r '[.[] | select(.status != "idle")] | length'
+# --> Should increase as work is claimed
+```
+
+**Session-specific detail:** [`references/api-contract-drift-2026-05-16.md`](references/api-contract-drift-2026-05-16.md)
+
+---
+
+## Complete Fleet Status Mapping
+
+When user asks "show me all agents" or "what's the fleet status":
+
+### Full Agent Inventory with Metadata
+
+```bash
+# Get all agents with key metadata fields
+curl -s "http://127.0.0.1:3100/api/companies/{COMPANY_ID}/agents" \
+  | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+print(f'Total agents: {len(data)}\n')
+print(f'{\"#\":<3} {\"Name\":<15} {\"Status\":<10} {\"Adapter\":<18} {\"HB\":<10} {\"ReportsTo\":<12}')
+print('-' * 75)
+for i, a in enumerate(data, 1):
+    name = (a.get('name') or '?')[:14]
+    status = (a.get('status') or '?')[:9]
+    adapter = (a.get('adapterType') or '?')[:17]
+    hb = a.get('lastHeartbeatAt')
+    hb = hb[11:16] if hb else '--:--'  # HH:MM
+    reports = (a.get('reportsToName') or a.get('reportsTo','?')[:8])[:11]
+    print(f'{i:<3} {name:<15} {status:<10} {adapter:<18} {hb:<10} {reports:<12}')
+"
+```
+
+**Key Status Indicators:**
+- `running` = actively processing (heartbeat recent)
+```
+
+## Related
+
+```bash
+# Group by adapter type to identify config patterns
+curl -s "http://127.0.0.1:3100/api/companies/{COMPANY_ID}/agents" \
+  | python3 -c "
+import sys, json
+from collections import Counter
+data = json.load(sys.stdin)
+
+by_adapter = Counter(a.get('adapterType','unknown') for a in data)
+by_status = Counter(a.get('status','unknown') for a in data)
+
+print('By Adapter:')
+for adapter, count in by_adapter.most_common():
+    print(f'  {adapter}: {count}')
+
+print('\nBy Status:')
+for status, count in by_status.most_common():
+    indicator = '✅' if status == 'idle' else '🔴' if status == 'error' else '⏸️'
+    print(f'  {indicator} {status}: {count}')
+"
+```
+
+---
+
+## Task Assignment Recommendations
+
+Match idle agents to open work based on capabilities:
+
+### Step 1: Identify Idle Agents with Capacity
+
+```bash
+# Find agents ready for work
+curl -s "http://127.0.0.1:3100/api/companies/{COMPANY_ID}/agents" \
+  | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+
+idle_agents = [a for a in data if a.get('status') == 'idle']
+print(f'Idle agents: {len(idle_agents)}')
+
+for a in idle_agents:
+    name = a.get('name','?')
+    capabilities = a.get('capabilities','')[:50]
+    title = a.get('title','')[:40]
+    print(f'  {name}: {title}')
+    if capabilities:
+        print(f'    Capabilities: {capabilities}...')
+"
+```
+
+### Step 2: Fetch Open Issues by Type
+
+```bash
+# Get unassigned work by category
+curl -s "http://127.0.0.1:3100/api/companies/{COMPANY_ID}/issues?status=todo,in_progress&limit=50" \
+  | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+issues = data if isinstance(data, list) else data.get('issues', [])
+
+# Categorize by keywords
+categories = {
+    'creative/art': ['plotter', 'art', 'generative', 'creative', 'svg', 'visual'],
+    'qa/review': ['qa', 'review', 'audit', 'verify'],
+    'skills': ['skill', 'establish', 'create skill'],
+    'trading': ['trading', 'pine', 'polymarket', 'backtest'],
+    'infrastructure': ['mcp', 'api', 'integration', 'server']
+}
+
+for cat, keywords in categories.items():
+    matches = []
+    for i in issues:
+        if i.get('status') in ('done', 'cancelled'):
+            continue
+        title = (i.get('title') or '').lower()
+        if any(k in title for k in keywords):
+            matches.append(i)
+    
+    unassigned = [i for i in matches if not i.get('assigneeId')]
+    print(f'{cat}: {len(matches)} total, {len(unassigned)} unassigned')
+"
+```
+
+### Step 3: Generate Assignment Recommendations
+
+Match agent capabilities to work categories:
+
+| Agent Role | Best For | Avoid |
+|------------|----------|-------|
+| **Builder** | Skill creation, implementation tasks | Creative/aesthetic work |
+| **Critic** | Scoring, quality assessment, 55/45 algo | Implementation coding |
+| **Scribe** | KB enrichment, documentation, research | Trading/real-time work |
+| **Kilo** | Fast-track execution, protocol work | Long-running research |
+| **Ombudsman** | Mediation, audits, process review | Technical implementation |
+### Step 4: Create Assignment Report
+
+Generate actionable assignment list:
+
+```bash
+# Generate actionable assignment list
+curl -s "http://127.0.0.1:3100/api/companies/{COMPANY_ID}/agents" > /tmp/agents.json
+curl -s "http://127.0.0.1:3100/api/companies/{COMPANY_ID}/issues?status=todo,in_progress&limit=100" > /tmp/issues.json
+
+python3 << 'EOF'
+import json
+
+agents = json.load(open('/tmp/agents.json'))
+issues = json.load(open('/tmp/issues.json'))
+
+print("## Task Assignment Recommendations\n")
+
+# Map agent capabilities to issue keywords
+assignments = {
+    'Critic': ['creative', 'art', 'plotter', 'scoring', '55/45', 'specimen'],
+    'Builder': ['skill', 'implement', 'build', 'create', 'fix'],
+    'Scribe': ['enrich', 'kb', 'knowledge', 'notebooklm', 'research'],
+    'Kilo': ['fast', 'protocol', 'execution', 'optimize'],
+    'Ombudsman': ['audit', 'review', 'mediate', 'process'],
+    'Verifier': ['qa', 'test', 'verify', 'regression']
+}
+
+for agent_name, keywords in assignments.items():
+    agent = next((a for a in agents if a.get('name') == agent_name), None)
+    if not agent or agent.get('status') != 'idle':
+        continue
+    
+    matches = []
+    for i in issues:
+        if i.get('status') in ('done', 'cancelled'):
+            continue
+        if i.get('assigneeId'):
+            continue
+        title = (i.get('title') or '').lower()
+        if any(k in title for k in keywords):
+            matches.append(i)
+    
+    if matches:
+        print(f"### {agent_name}")
+        print(f"Status: {agent.get('status')} | Capabilities: {agent.get('title','?')[:40]}")
+        print(f"\nRecommended issues ({len(matches)} matches):")
+        for m in matches[:5]:
+            key = m.get('key', '???')
+            title = m.get('title', '?')[:55]
+            print(f"  - {key}: {title}")
+        print()
+EOF
+```
+
+**Automated routing:** For hands-free dispatch (zombie clearing + domain routing + WIP limits), use the included script: `scripts/dispatch-router.py`
+
+```bash
+# Dry run — preview what would happen
+python3 ~/.hermes/skills/devops/paperclip-fleet-analyzer/scripts/dispatch-router.py --dry-run
+
+# Execute — actually PATCH assignments
+python3 ~/.hermes/skills/devops/paperclip-fleet-analyzer/scripts/dispatch-router.py --execute
+
+# Clear only zombie assignments
+python3 ~/.hermes/skills/devops/paperclip-fleet-analyzer/scripts/dispatch-router.py --clear-zombies
+```
+
+---
+
+## Post-Crash Recovery Procedures
+
+After unexpected hard shutdowns or system restarts: [See `references/post-crash-recovery-YYYY-MM-DD.md` for session-specific logs]
+
+### Phase 0: Pre-Restart Checks (Prevent Further Damage)
+
+```bash
+# Check log file size - large logs cause slow startup/response
+ls -lh ~/.paperclip/instances/default/logs/server.log
+du -sh ~/.paperclip/instances/default/logs/
+
+# If >100MB, truncate before restart (rotation may be broken)
+tail -c 10M ~/.paperclip/instances/default/logs/server.log > /tmp/server.log.tmp
+mv /tmp/server.log.tmp ~/.paperclip/instances/default/logs/server.log
+
+# Check Node version compatibility
+node --version  # Paperclip may fail on Node 20+ with ES Module errors
+```
+
+### Phase 1: Start Paperclip with Error Monitoring
+
+```bash
+cd ~/.paperclip/instances/default
+
+# Start in foreground first to catch startup errors
+npx paperclipai run 2>&1 | tee /tmp/paperclip-startup.log
+```
+
+**Common Post-Crash Errors:**
+| Error Pattern | Cause | Fix |
+|--------------|-------|-----|
+| `require() of ES Module... not supported` | Node version incompatibility (v20+ vs older npx cache) | Clear npx cache: `rm -rf ~/.npm/_npx/*` or use Node 18 |
+| `Port 3100 already in use` | Zombie process from crash | `lsof -i :3100` then `kill -9 <PID>` |
+| Database lock errors | Unclean shutdown left lock files | Remove `~/.paperclip/instances/default/db/*.lock` |
+| `Error: connect ECONNREFUSED 127.0.0.1:54329` | Embedded PostgreSQL not ready | Wait 10s, retry; check `db/postgres.pid` |
+
+### Phase 2: Verify Startup Success
+
+```bash
+# Check port is listening
+lsof -i :3100 | grep LISTEN
+
+# Quick API health check (no auth needed for localhost)
+curl -s "http://127.0.0.1:3100/api/companies/{COMPANY_ID}/agents" | head -c 200
+
+# Check process stability
+sleep 5 && ps aux | grep paperclipai | grep -v grep
+```
+
+### Phase 3: Validate Full Fleet Recovery
+
+After Paperclip starts, validate dependent systems:
+
+```bash
+# Check all Discord gateways are still connected
+ps aux | grep "hermes.*gateway run" | grep -v grep | awk '{print $NF}' | sort | uniq -c
+
+# Expected: One process per active bot profile
+# If any missing: hermes gateway run --profile <name>
+
+# Verify agent adapter types match expectations
+curl -s "http://127.0.0.1:3100/api/companies/{cid}/agents" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+for a in data:
+    status = '✅' if a.get('status') == 'idle' else '🔄' if a.get('status') == 'running' else '❌'
+    print(f\"{status} {a.get('name','?'):<15} {a.get('adapterType','?'):<15}\")
+"
+```
+
+### Recovery Completion Checklist
+
+- [ ] Paperclip listening on :3100
+- [ ] API responds to `/api/companies/{cid}/agents`
+- [ ] All expected Discord gateway processes running
+- [ ] Log file size < 100MB (or rotated)
+- [ ] No ES Module / require() errors in startup log
+- [ ] Agent statuses showing `idle` or `running` (not `error`)
+
+## Related
+
+- `paperclip-hermes-config-sync` (agent adapterConfig updates, bulk migration, provider recovery)
+- `hermes-multi-agent-discord` (pinned, for swarm operations)
+- `verify-before-claiming` (for verification discipline)
+
+## Scripts
+
+- `scripts/bulk-comment-recovery.py` — Bulk-comment recovery noise issues (skips done/cancelled to avoid 500 errors)
+- `scripts/dispatch-router.py` — Automated dispatch routing with zombie clearing + domain routing + WIP limits
+- `scripts/cron-audit.py` — Parse `hermes cron list` TUI output; detect stale jobs, missing scripts, and error runs
+
+Paperclip API has specific limitations that affect fleet automation:
+
+| Operation | API Support | Workaround |
+|-----------|-------------|------------|
+| Agent `adapterConfig` update | ✅ PATCH `/api/agents/{id}` | Include complete object; partial updates silently drop fields |
+| Agent `status` update | ✅ PATCH `/api/agents/{id}` | Set `"status": "idle"` to clear error state |
+| Issue `status` update | ✅ PATCH `/api/issues/{id}` | Set `"status": "done"`, `"cancelled"`, `"todo"`, etc. |
+| Issue `assigneeAgentId` update | ✅ PATCH `/api/issues/{id}` | Set to `""` to unassign; set to agent UUID to assign |
+| Issue comments | ✅ POST `/api/issues/{id}/comments` | Use `{"body": "..."}` not `content`; skip done/cancelled to avoid 500 |
+| Issue bulk operations | ❌ Not available | Loop individual PATCH/POST with rate limit delays |
+| Agent heartbeat trigger | ❌ Not available | Agents self-poll; ensure cron intervals correct |
+
+**Verified 2026-05-13:**
+- PATCH agent adapterConfig → 200 OK (8/8 swarm agents migrated k2p5→k2p6-turbo)
+- PATCH agent status → 200 OK (cleared error states)
+- PATCH issue status → 200 OK (cancelled 90 recovery noise issues)
+- PATCH issue assigneeAgentId → 200 OK (bulk unassigned 157 zombies, assigned 77 real issues)
+- POST issue comments → 201 Created (but 500 on terminal-state issues — filter first)
+
+**For full details:** See [`references/endpoint-limitations-and-workarounds.md`](references/endpoint-limitations-and-workarounds.md)
+
+### Alive vs. Total — The Status Enumeration Pitfall
+
+**The API returns ALL issues, not just "open" ones.** A naive `curl .../issues?limit=250` returns done, cancelled, blocked, todo, in_progress, and backlog together.
+
+**Always filter by status before counting:**
+
+```python
+from collections import Counter
+
+# Fetch all issues
+resp = requests.get(f"{BASE}/companies/{COMPANY_ID}/issues?limit=250")
+issues = resp.json() if isinstance(resp.json(), list) else resp.json().get('issues', [])
+
+# Count by status
+status_counts = Counter(i.get('status') for i in issues)
+print("All issues by status:")
+for status, count in sorted(status_counts.items(), key=lambda x: -x[1]):
+    print(f"  {status}: {count}")
+
+# Real alive backlog
+total = len(issues)
+alive = [i for i in issues if i.get('status') not in ('done', 'cancelled')]
+print(f"\nTotal: {total} | Alive (not done/cancelled): {len(alive)}")
+```
+
+**Typical distribution (from 2026-05-12 audit):**
+| Status | Count | Meaning |
+|--------|-------|---------|
+| blocked | 86 | Stalled, needs unblock |
+| done | 82 | Completed, should be archived |
+| todo | 58 | Queued, ready to start |
+| in_progress | 13 | Active work |
+| cancelled | 10 | Killed, noise |
+| backlog | 1 | Low priority |
+
+**Consequence of not filtering:** Reporting "250 open issues" when only 158 are alive destroys credibility and leads to wrong triage decisions.
+
+### Recovery Comment 500 Errors
+
+When bulk-commenting recovery duplicates, some issues return HTTP 500. Pattern observed: these are issues with status `done` or `cancelled`. The API seems to reject comments on terminal-state issues.
+
+**Workaround:** Check status before commenting. Skip done/cancelled issues.
+
+```python
+for i in recovery:
+    if i.get('status') in ('done', 'cancelled'):
+        continue  # Will 500; already dead anyway
+    # ... post comment ...
+```
+
+---
+
+## Creating Tracking Issues (Unblock Markers)
+
+When auth or dependencies are resolved programmatically, create tracking issues to notify agents and document unblock:
+
+### Paperclip Comment-as-Delivery (Durable Reports)
+
+For recurring reports (daily alignment, fleet health, cron audits), **post the report as a Paperclip issue comment** rather than relying solely on Discord. Discord tokens expire; Paperclip comments are the durable record.
+
+```bash
+# Post a comment to any open issue
+curl -s -X POST -H 'Content-Type: application/json' \
+  -d '{"body": "## Daily Alignment Report \u2014 2026-05-27\n\nFleet: 21 agents, 8 error..."}' \
+  "http://127.0.0.1:3100/api/issues/{issue_uuid}/comments"
+# → HTTP 201 on success
+```
+
+**Best target:** The most relevant open issue — e.g., a P0 cron issue for cron health reports, or the agent's own blocked issue for agent-specific status.
+
+**Always also write to vault:** Save the full report to `claude-vault/13-Reports/daily-alignment/YYYY-MM-DD-{agent}-daily-alignment.md` for cross-session reference.
+
+**Never deliver only to Discord** — Discord 401 errors silently drop reports.
+
+```python
+def create_unblock_marker(component, unblocks_list, agent_id, priority="critical"):
+    """Create an issue marking something as unblocked"""
+    payload = {
+        "title": f"[PRIORITY] UNBLOCKED: {component} ready for work",
+        "description": f"**{component} authentication resolved**\n\n" +
+                      f"Completed: {datetime.now().isoformat()}\n\n" +
+                      "**Now Unblocked**\n" +
+                      "\n".join([f"- {i}" for i in unblocks_list]) +
+                      "\n\n**Next Actions**\n" +
+                      f"Resume work on {len(unblocks_list)} issues immediately.",
+        "priority": priority,
+        "status": "done",  # Immediately mark complete
+        "assigneeAgentId": agent_id,
+        "companyId": COMPANY_ID
+    }
+    # POST to /api/companies/{cid}/issues
+```
+
+### Priority Sequence Pattern
+
+When deploying comprehensive unblocks, use priority numbering:
+
+```
+Priority 3: Infrastructure (skills, dependencies) — fix first
+Priority 1: Unblocked notifications — mark ready
+Priority 2: Verification — confirm working
+```
+
+This ensures dependencies exist before notifications go out.

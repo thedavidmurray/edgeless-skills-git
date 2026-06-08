@@ -1,0 +1,114 @@
+//@version=5
+strategy("Risk Management Suite", shorttitle="RiskMgmt", overlay=true,
+     initial_capital=100000,
+     default_qty_type=strategy.percent_of_equity,
+     default_qty_value=5,
+     pyramiding=0,
+     commission_type=strategy.commission.percent,
+     commission_value=0.1)
+
+// === INPUTS ===
+useATRStop = input.bool(true, "Use ATR Stop Loss")
+atrLength = input.int(14, "ATR Length")
+atrMultiplier = input.float(2.0, "ATR Multiplier")
+useProfitTarget = input.bool(true, "Use Profit Target")
+profitMultiplier = input.float(2.0, "Profit Target (R multiple)")
+useMaxLoss = input.bool(true, "Use Max Daily Loss")
+maxDailyLossPct = input.float(5.0, "Max Daily Loss %")
+useTrailingStop = input.bool(false, "Use Trailing Stop")
+trailingATRMult = input.float(3.0, "Trailing Stop ATR Multiplier")
+
+// === RISK CALCULATIONS ===
+atr = ta.atr(atrLength)
+
+// Daily loss tracking
+var float dailyStartingEquity = 0.0
+var float dailyPnL = 0.0
+newDay = dayofweek != dayofweek[1] or bar_index == 0
+
+if newDay
+    dailyStartingEquity := strategy.equity
+    dailyPnL := 0.0
+
+dailyPnL := strategy.equity - dailyStartingEquity
+dailyLossLimitBreached = useMaxLoss and dailyPnL <= -maxDailyLossPct / 100 * dailyStartingEquity
+
+// === SIGNALS ===
+// Example: MA crossover (replace with your own signal)
+fastMA = ta.sma(close, 10)
+slowMA = ta.sma(close, 30)
+longCondition = ta.crossover(fastMA, slowMA) and not dailyLossLimitBreached
+shortCondition = ta.crossunder(fastMA, slowMA) and not dailyLossLimitBreached
+
+// === POSITION SIZING ===
+// ATR-based position sizing
+stopDistance = useATRStop ? atr * atrMultiplier : close * 0.05
+riskPercent = input.float(1.0, "Risk % per Trade")
+accountRisk = strategy.equity * riskPercent / 100
+positionSize = useATRStop ? accountRisk / stopDistance : na
+
+// === EXECUTION ===
+if longCondition
+    strategy.entry("Long", strategy.long, qty=positionSize)
+
+if shortCondition
+    strategy.close("Long")
+
+// === EXITS ===
+// Stop loss
+if useATRStop and strategy.position_size > 0
+    strategy.exit("ATR Stop", "Long", stop=close - stopDistance)
+
+// Profit target
+if useProfitTarget and strategy.position_size > 0
+    profitTarget = strategy.position_avg_price + stopDistance * profitMultiplier
+    strategy.exit("Profit Target", "Long", limit=profitTarget)
+
+// Trailing stop
+if useTrailingStop and strategy.position_size > 0
+    strategy.exit("Trailing Stop", "Long", trail_points=atr * trailingATRMult / syminfo.mintick)
+
+// === PLOTTING ===
+plot(fastMA, "Fast MA", color=color.new(color.blue, 50))
+plot(slowMA, "Slow MA", color=color.new(color.orange, 50))
+
+// Stop loss line
+plot(strategy.position_size > 0 and useATRStop ? close - stopDistance : na, 
+     "Stop Loss", color=color.new(color.red, 50), style=plot.style_linebr)
+
+// Profit target line
+plot(strategy.position_size > 0 and useProfitTarget ? strategy.position_avg_price + stopDistance * profitMultiplier : na, 
+     "Profit Target", color=color.new(color.green, 50), style=plot.style_linebr)
+
+// === INFO PANEL ===
+var table riskTable = table.new(position.top_right, 2, 6, bgcolor=color.new(color.black, 80), frame_width=1)
+
+if barstate.islast
+    table.cell(riskTable, 0, 0, "Daily P&L", text_color=color.white, text_size=size.small)
+    table.cell(riskTable, 1, 0, str.tostring(dailyPnL, "#.##") + " (" + str.tostring(dailyPnL / dailyStartingEquity * 100, "#.##") + "%)", 
+               text_color=dailyPnL >= 0 ? color.green : color.red, text_size=size.small)
+    
+    table.cell(riskTable, 0, 1, "ATR", text_color=color.white, text_size=size.small)
+    table.cell(riskTable, 1, 1, str.tostring(atr, "#.###"), text_color=color.white, text_size=size.small)
+    
+    table.cell(riskTable, 0, 2, "Stop Distance", text_color=color.white, text_size=size.small)
+    table.cell(riskTable, 1, 2, str.tostring(stopDistance, "#.###"), text_color=color.red, text_size=size.small)
+    
+    table.cell(riskTable, 0, 3, "Position Size", text_color=color.white, text_size=size.small)
+    table.cell(riskTable, 1, 3, str.tostring(positionSize, "#.##"), text_color=color.yellow, text_size=size.small)
+    
+    table.cell(riskTable, 0, 4, "Daily Loss Limit", text_color=color.white, text_size=size.small)
+    table.cell(riskTable, 1, 4, str.tostring(-maxDailyLossPct, "#.#") + "%", 
+               text_color=dailyLossLimitBreached ? color.red : color.gray, text_size=size.small)
+    
+    table.cell(riskTable, 0, 5, "Trading Status", text_color=color.white, text_size=size.small)
+    table.cell(riskTable, 1, 5, dailyLossLimitBreached ? "HALTED" : "ACTIVE", 
+               text_color=dailyLossLimitBreached ? color.red : color.green, text_size=size.small)
+
+// === ALERTS ===
+alertcondition(longCondition, title="Risk-Adjusted Buy", 
+               message='{"action": "buy", "ticker": "{{ticker}}", "price": {{close}}, "stop": ' + str.tostring(close - stopDistance) + '}')
+alertcondition(shortCondition, title="Risk-Adjusted Sell", 
+               message='{"action": "sell", "ticker": "{{ticker}}", "price": {{close}}}')
+alertcondition(dailyLossLimitBreached, title="Daily Loss Limit Breached", 
+               message='{"action": "halt", "reason": "daily_loss_limit", "daily_pnl": ' + str.tostring(dailyPnL) + '}')

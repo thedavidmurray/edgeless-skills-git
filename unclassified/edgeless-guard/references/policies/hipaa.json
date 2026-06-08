@@ -1,0 +1,86 @@
+{
+  "name": "hipaa",
+  "version": "1.1.0",
+  "framework": "HIPAA",
+  "description": "Protected Health Information (PHI) handling, encryption, and access control guardrails for Hermes agent workflows.",
+  "guard": {
+    "mode": "block",
+    "redact_fields": [
+      "SSN",
+      "medical_record_number",
+      "health_plan_beneficiary_number",
+      "account_number",
+      "certificate_or_license_number"
+    ],
+    "max_output_bytes": 4096
+  },
+  "rules": [
+    {
+      "id": "phi_pattern_detection",
+      "type": "pattern",
+      "category": "phi",
+      "severity": "critical",
+      "match": "\\b\\d{3}-\\d{2}-\\d{4}\\b",
+      "message": "Potential Social Security Number (SSN) detected in output.",
+      "suggestion": "Redact SSNs before logging, storing, or transmitting.",
+      "remediation_steps": [
+        "Mask SSN with ###-##-####",
+        "Route PHI through approved encryption layer"
+      ]
+    },
+    {
+      "id": "phi_medical_record",
+      "type": "pattern",
+      "category": "phi",
+      "severity": "critical",
+      "match": "MRN[:\\-]?\\s*\\w+|Medical Record\\s*(Number|#|No)",
+      "message": "Potential medical record identifier detected.",
+      "suggestion": "Treat medical record numbers as PHI and redact."
+    },
+    {
+      "id": "phi_health_insurance_id",
+      "type": "pattern",
+      "category": "phi",
+      "severity": "critical",
+      "match": "Health Plan|Beneficiary|Insurance ID|Group Number",
+      "message": "Potential health insurance identifier detected.",
+      "suggestion": "Obscure health plan identifiers under HIPAA safe harbor."
+    },
+    {
+      "id": "credential_exposure",
+      "type": "pattern",
+      "category": "pii",
+      "severity": "high",
+      "match": "(password|passphrase|secret|api[_-]?key|token|bearer)\\s*[:=]",
+      "message": "Credential secret exposed in visible text.",
+      "suggestion": "Load secrets from secret manager only; never print.",
+      "remediation_steps": [
+        "Replace hard-coded secret with env var or vault ref",
+        "Rotate exposed secret immediately"
+      ]
+    },
+    {
+      "id": "provider_collaboration_disclosure",
+      "type": "pattern",
+      "category": "phi",
+      "severity": "high",
+      "match": "(shared.*provider|third[- ]party.*admin|subprocessor.*PHI|business associate)",
+      "message": "PHI sharing without Business Associate Agreement (BAA) confirmation.",
+      "suggestion": "Require signed BAA before transmitting PHI to any vendor.",
+      "remediation_steps": [
+        "Pause transmission until BAA is on file",
+        "Log audit event for compliance review"
+      ]
+    }
+  ],
+  "exceptions": [],
+  "reporting": {
+    "formats": ["json", "txt"]
+  },
+  "tags": [
+    "healthcare",
+    "privacy",
+    "phi",
+    "hipaa"
+  ]
+}

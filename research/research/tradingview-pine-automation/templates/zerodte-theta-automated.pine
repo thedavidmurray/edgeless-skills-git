@@ -1,0 +1,50 @@
+//@version=5
+strategy("0DTE Theta Capture - Automated", overlay=false, initial_capital=100000)
+
+// Inputs
+iv_rank_threshold = input.int(50, "IV Rank Minimum")
+start_hour = input.int(10, "Start Hour")
+end_hour = input.int(15, "End Hour")
+end_minute = input.int(45, "End Minute")
+
+// Market data
+vix_close = request.security("VIX", timeframe.period, close)
+
+// IV Rank calculation
+vix_high_52 = ta.highest(vix_close, 52)
+vix_low_52 = ta.lowest(vix_close, 52)
+iv_rank = ((vix_close - vix_low_52) / (vix_high_52 - vix_low_52)) * 100
+
+// Time filters
+in_session = (hour > start_hour) and (hour < end_hour or (hour == end_hour and minute <= end_minute))
+
+// Entry conditions
+high_iv = iv_rank > iv_rank_threshold
+ema20 = ta.ema(close, 20)
+ema50 = ta.ema(close, 50)
+in_uptrend = close > ema20 and ema20 > ema50
+optimal_window = hour >= 10 and hour <= 14
+
+// Signal generation
+sell_puts = high_iv and in_uptrend and optimal_window and strategy.position_size == 0 and in_session
+
+// Kelly sizing: 4% quarter-Kelly for 72% win rate
+kelly_size = strategy.equity * 0.04
+
+// Webhook alert (automated)
+alert_message = '{"strategy": "0DTE_theta", "action": "sell_put_spread", "symbol": "SPY", "confidence": 0.72}'
+
+// Automated execution
+if sell_puts
+    qty = kelly_size / close
+    strategy.entry("Theta", strategy.short, qty=qty)
+    alert(alert_message, alert.freq_once_per_bar)
+
+// Automated exits
+if hour == end_hour and minute >= end_minute and strategy.position_size != 0
+    strategy.close_all(comment="Time Exit")
+
+// Plotting
+plot(iv_rank, "IV Rank", color=color.purple)
+hline(iv_rank_threshold, "Threshold", color=color.red)
+plotshape(sell_puts, "Entry", shape.triangleup, location.bottom, color.green)

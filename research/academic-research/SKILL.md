@@ -1,0 +1,237 @@
+---
+name: academic-research
+description: "13-agent deep research pipeline for rigorous academic investigation. 7 modes: full, quick, socratic, lit-review, fact-check, systematic-review, review. Research question formulation, methodology design, systematic literature search, source verification, cross-source synthesis, risk of bias assessment, meta-analysis, APA 7.0 report. Anti-leakage protocol, two-layer citation emission. Integrates with arxiv skill."
+version: 1.0.0
+author: Kilo (ported from Imbad0202/ARS)
+license: MIT
+metadata:
+  hermes:
+    tags: [Research, Deep-Research, Literature-Review, Meta-Analysis, Fact-Check, APA7]
+    related_skills: [arxiv, academic-paper]
+    toolsets: [web, file, terminal, code_execution]
+---
+
+# Academic Research — 13-Agent Deep Research Pipeline
+
+Ported from ARS v2.9.3 to Hermes skill format. Universal deep research for any discipline.
+
+## Quick Start
+
+```
+research the impact of AI on higher education QA
+skill_view(name='academic-research', mode='socratic')  # Guided thinking
+skill_view(name='academic-research', mode='full')        # Complete research report
+```
+
+## Modes
+
+| Mode | Trigger | Description | Output |
+|------|---------|-------------|--------|
+| `full` | "research", "deep research" | Complete 6-phase pipeline | APA 7.0 research report |
+| `socratic` | "guide my research", "help me think" | Guided research dialogue | INSIGHT collection |
+| `quick` | "quick brief", "30 min research" | Fast research summary | Executive summary |
+| `lit-review` | "literature review" | Literature synthesis only | Annotated bibliography |
+| `fact-check` | "fact-check", "verify" | Source verification | Verification report |
+| `systematic-review` | "systematic review", "PRISMA" | PRISMA-compliant review | Full SR report |
+| `review` | "review this paper" | Paper evaluation | Assessment report |
+
+## 13-Agent Pipeline
+
+| # | Agent | Phase | Role |
+|---|-------|-------|------|
+| 1 | `research_question_agent` | 1/Socratic L1 | FINER-scoped RQ formulation |
+| 2 | `research_architect_agent` | 1 | Methodology blueprint |
+| 3 | `bibliography_agent` | 2 | Systematic literature search |
+| 4 | `source_verification_agent` | 2 | Fact-checking, source grading |
+| 5 | `synthesis_agent` | 3 | Cross-source integration |
+| 6 | `report_compiler_agent` | 4/6 | APA 7.0 report drafting |
+| 7 | `editor_in_chief_agent` | 5 | Q1 journal editorial review |
+| 8 | `devils_advocate_agent` | 1,3,5,Socratic | Challenge assumptions |
+| 9 | `ethics_review_agent` | 5 | AI-assisted research ethics |
+| 10 | `socratic_mentor_agent` | Socratic | Q1 editor persona guidance |
+| 11 | `risk_of_bias_agent` | SR Phase 2 | RoB 2 / ROBINS-I assessment |
+| 12 | `meta_analysis_agent` | SR Phase 3 | Effect sizes, heterogeneity |
+| 13 | `monitoring_agent` | Post-pipeline | Literature monitoring |
+
+## Orchestration: 6-Phase Workflow
+
+```
+Phase 1: SCOPING       -> research_question + research_architect -> RQ Brief + Methodology Blueprint
+Phase 2: INVESTIGATION  -> bibliography + source_verification      -> Annotated Bibliography + Verified Corpus
+Phase 3: ANALYSIS       -> synthesis_agent (+ devil's advocate)   -> Synthesis Report + Gap Analysis
+Phase 4: COMPOSITION    -> report_compiler_agent                   -> Draft APA 7.0 Report
+Phase 5: REVIEW         -> editor_in_chief + devil's + ethics      -> Review Verdict + Ethics Clearance
+Phase 6: REVISION       -> report_compiler_agent                   -> Final Polished Report
+```
+
+## Mode Selection Guide
+
+```
+User Input
+    |
+    +-- Clear research question?
+    |   +-- Yes --> Need PRISMA systematic review?
+    |   |           +-- Yes --> systematic-review mode
+    |   |           +-- No --> Need full report?
+    |   |                      +-- Yes --> full mode
+    |   |                      +-- No --> Only literature?
+    |   |                                 +-- Yes --> lit-review
+    |   |                                 +-- No --> quick mode
+    |   +-- No --> Want guidance?
+    |              +-- Yes --> socratic mode
+    |              +-- No --> full mode (Phase 1 interactive)
+    +-- Text to review? --> review mode
+    +-- Fact-check only? --> fact-check mode
+```
+
+## Integration with arxiv Skill
+
+```python
+# Literature search
+# Uses arxiv skill patterns + Semantic Scholar API
+# See arxiv skill for: search_arxiv.py, SS citation queries
+
+# Search pattern
+curl "https://export.arxiv.org/api/query?search_query=all:TOPIC&max_results=20"
+curl "https://api.semanticscholar.org/graph/v1/paper/search?query=TOPIC&limit=20"
+```
+
+## Anti-Leakage Protocol
+
+Activate when user provides RQ Brief + Synthesis Report + Annotated Bibliography AND mode is `full`:
+
+1. **Knowledge Isolation Directive**: LLM must not hallucinate beyond provided sources
+2. **Two-Layer Citation Emission**: Inline citations + full reference list
+3. **Source Anchoring**: Every claim tied to verified source
+4. **Gap Flagging**: Explicitly mark where evidence is insufficient
+
+## Directed Prompting for Research Auditing
+
+When conducting research that involves auditing, inspection, or verification (e.g., code review, data validation, finding bugs), **directed prompting** dramatically outperforms generic prompts.
+
+**Generic:** "Research this topic for issues" → Ambiguous, wastes tokens on irrelevant areas
+**Directed:** "Audit the [specific component] for [specific vulnerability class] that could lead to [specific impact]" → Surgical, high success rate
+
+**Reference:** See `subagent-orchestration/references/directed-prompting-2026-06-04.md` for the Zcash audit case study (1/4 success rate with generic prompts, 100% with directed prompts).
+
+**Application in research:**
+- Literature review: "Search for evidence that contradicts [specific claim] in [specific domain]"
+- Data validation: "Check the [specific pipeline] for [specific error type] that could lead to [specific outcome]"
+- Source verification: "Verify that all footnotes in [specific section] actually appear in the reference list"
+
+## Source Quality Hierarchy
+
+| Tier | Type | Trust Level |
+|------|------|-------------|
+| 1 | Systematic reviews, meta-analyses | Highest |
+| 2 | RCTs, well-controlled studies | High |
+| 3 | Cohort/case-control studies | Moderate |
+| 4 | Expert opinion, editorials | Low |
+| 5 | Unverified sources | Reject |
+
+## Socratic Mode: 5 Layers
+
+| Layer | Focus | Output |
+|-------|-------|--------|
+| 1 | Research Readiness | RQ refinement |
+| 2 | Architecture Design | Methodology |
+| 3 | Literature Landscape | Source mapping |
+| 4 | Analysis Strategy | Approach |
+| 5 | Synthesis Plan | Report structure |
+
+**Convergence signals** (4 types):
+- Aha moments, specificity jumps, resistance collapse, forward reference
+
+## Systematic Review Mode (PRISMA)
+
+Additional agents activated:
+- `risk_of_bias_agent`: RoB 2 (RCTs), ROBINS-I (non-randomized)
+- `meta_analysis_agent`: Effect sizes, heterogeneity (I²), GRADE
+
+PRISMA checklist compliance for:
+- Protocol registration
+- Search strategy documentation
+- Dual screening
+- Risk of bias assessment
+- Narrative or quantitative synthesis
+
+## Fact-Check Mode
+
+1. Source verification hierarchy
+2. Predatory journal detection
+3. Conflict-of-interest flagging
+4. Evidence quality grading
+5. Cross-reference validation
+
+## Citation Integration
+
+Two-layer emission:
+1. **Inline citations**: Narrative (Smith, 2024) or parenthetical
+2. **Reference list**: Full APA 7.0 entries
+
+## Usage Examples
+
+```python
+# Full research report
+skill_view(name='academic-research', mode='full', topic="AI in higher education QA")
+
+# Socratic guidance
+skill_view(name='academic-research', mode='socratic', topic="declining birth rates + private universities")
+
+# Systematic review
+skill_view(name='academic-research', mode='systematic-review', 
+           research_question="What is the effect of X on Y?")
+
+# Fact-check specific claims
+skill_view(name='academic-research', mode='fact-check', 
+           claims=["Claim 1", "Claim 2"])
+```
+
+## Subagent Delegation Pattern
+
+```python
+# Phase 1: RQ formation
+delegate_task(
+    goal="Transform vague topic into FINER-scoped research question",
+    context={"topic": "...", "mode": "full"},
+    toolsets=["web"]
+)
+
+# Phase 2: Literature search
+delegate_task(
+    goal="Conduct systematic literature search with source screening",
+    context={"rq": "...", "methodology": "..."},
+    toolsets=["web", "arxiv"]  # arxiv skill loaded
+)
+
+# Phase 3: Synthesis
+delegate_task(
+    goal="Cross-source integration, contradiction resolution, gap analysis",
+    context={"bibliography": [...], "sources": [...]},
+    toolsets=["file"]
+)
+```
+
+## Knowledge Spine Extraction
+
+For structured ingestion of academic textbooks (e.g., SLP3), see `references/slp3-knowledge-spine-extraction.md` for:
+- PDF download and text extraction pipeline
+- Knowledge spine markdown format
+- Progress tracking via canonical tracker
+- Paperclip issue integration
+- Batch grouping by topic area
+
+## References
+
+- `agents/research_question_agent.md` - RQ formulation
+- `agents/bibliography_agent.md` - Literature search
+- `agents/synthesis_agent.md` - Cross-source integration
+- `agents/report_compiler_agent.md` - APA 7.0 report
+- `agents/socratic_mentor_agent.md` - Socratic guidance
+- `agents/risk_of_bias_agent.md` - RoB assessment
+- `agents/meta_analysis_agent.md` - Quantitative synthesis
+
+## Source Attribution
+
+Ported from: https://github.com/Imbad0202/academic-research-skills
+Original: ARS Deep Research v2.9.3 by Imbad0202

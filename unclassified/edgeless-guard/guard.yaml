@@ -1,0 +1,60 @@
+mode: enforce
+
+rules:
+  - id: PII-MedHL7
+    targets:
+      actions: ["store","process"]
+      domains: ["phi","hipaa"]
+    action: require_human
+    reason: Protected Health Information requires human compliance review
+    framework: HIPAA
+    jurisdiction: US
+
+  - id: FINRA-RecordRetention
+    targets:
+      actions: ["publish"]
+      domains: ["sox","finra"]
+    action: redact
+    reason: Sensitive broker-dealer output must be retained without external exposure
+    framework: SOX/FINRA
+    jurisdiction: US
+    redact_fields: ["client_detail"]
+
+  - id: EU-AI-Article6
+    targets:
+      actions: ["deploy"]
+      domains: ["ai-act"]
+    action: block
+    reason: High-risk AI System deployment requires conformity assessment documentation
+    framework: EU AI Act
+    jurisdiction: EU
+    level: primary
+
+  - id: SOC2-AccessControl
+    targets:
+      actions: ["process","store"]
+      domains: ["soc2","ferpa"]
+    action: warn
+    reason: Entity must complete SC-200 scope review
+    framework: SOC 2
+    jurisdiction: US
+
+  - id: SOX-Lock
+    targets:
+      actions: ["delete","modify"]
+      domains: ["sox","financial"]
+    action: block
+    reason: Financial retention window not complete
+    framework: SOX
+    jurisdiction: US
+    level: primary
+
+  - id: DraftGuard
+    targets:
+      actions: ["process"]
+      domains: ["draft"]
+    action: block
+    reason: Unreleased draft tier is not production eligible
+    framework: draft
+    jurisdiction: N/A
+    level: draft

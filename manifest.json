@@ -1,0 +1,616 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-08T07:09:44.182512+00:00",
+  "domains": {
+    "creative": [
+      ".templates",
+      "assets",
+      "references",
+      "scripts"
+    ],
+    "devops": [
+      ".templates",
+      "assets",
+      "references",
+      "scripts"
+    ],
+    "research": [
+      ".templates",
+      "academic-research",
+      "assets",
+      "references",
+      "research",
+      "scripts"
+    ],
+    "product": [
+      ".templates",
+      "assets",
+      "references",
+      "scripts"
+    ],
+    "tooling": [
+      ".templates",
+      "assets",
+      "references",
+      "scripts"
+    ],
+    "observability": [
+      ".templates",
+      "assets",
+      "references",
+      "scripts"
+    ],
+    "ingestion": [
+      ".templates",
+      "assets",
+      "references",
+      "scripts"
+    ],
+    "knowledge": [
+      ".templates",
+      "assets",
+      "references",
+      "scripts",
+      "vault-knowledge-ops"
+    ],
+    "security": [
+      ".templates",
+      "assets",
+      "references",
+      "scripts",
+      "security-best-practices",
+      "security-ownership-map",
+      "security-threat-model"
+    ],
+    "system": [
+      ".templates",
+      "assets",
+      "references",
+      "scripts"
+    ],
+    "external": [
+      ".templates",
+      "assets",
+      "references",
+      "scripts"
+    ],
+    "unclassified": [
+      ".templates",
+      "academic-paper",
+      "academic-review",
+      "assets",
+      "baoyu-comic-pipeline",
+      "claude-projects-agents-bridge",
+      "claude-projects-backlog-bridge",
+      "claude-projects-code-review-bridge",
+      "claude-projects-commands-bridge",
+      "claude-projects-hooks-bridge",
+      "claude-projects-local-bridge",
+      "claude-projects-memory-bridge",
+      "claude-projects-n8n-bridge",
+      "cli-dashboards",
+      "coding",
+      "cron-skill-review",
+      "discord-swarm-ombudsman",
+      "dmux-workflows",
+      "doc",
+      "docs",
+      "drafting",
+      "edgeless-guard",
+      "email-intelligence-engineer",
+      "eval-harness",
+      "gh-address-comments",
+      "gh-fix-ci",
+      "graphify",
+      "incident-response-commander",
+      "infrastructure-maintainer",
+      "ios-build-troubleshooting",
+      "kb-curation",
+      "monitoring",
+      "openai-docs",
+      "ops-alert",
+      "paperclip-fleet-analyzer",
+      "pdf",
+      "planning",
+      "playwright",
+      "playwright-interactive",
+      "proof-of-completion",
+      "recall",
+      "references",
+      "review",
+      "scrapping",
+      "screenshot",
+      "scripts",
+      "sentry",
+      "signal-extraction-layer",
+      "speech",
+      "touchdesigner-generative-art",
+      "transcribe",
+      "triage",
+      "verify-before-claiming",
+      "youtube-summarizer"
+    ]
+  },
+  "skills": {
+    ".templates": {
+      "domain": "unclassified",
+      "path": "unclassified/.templates",
+      "checksum": "e3b0c44298fc1c14",
+      "has_scripts": false,
+      "has_references": false,
+      "has_assets": false
+    },
+    "assets": {
+      "domain": "unclassified",
+      "path": "unclassified/assets",
+      "checksum": "e3b0c44298fc1c14",
+      "has_scripts": false,
+      "has_references": false,
+      "has_assets": false
+    },
+    "references": {
+      "domain": "unclassified",
+      "path": "unclassified/references",
+      "checksum": "e3b0c44298fc1c14",
+      "has_scripts": false,
+      "has_references": false,
+      "has_assets": false
+    },
+    "scripts": {
+      "domain": "unclassified",
+      "path": "unclassified/scripts",
+      "checksum": "e3b0c44298fc1c14",
+      "has_scripts": false,
+      "has_references": false,
+      "has_assets": false
+    },
+    "academic-research": {
+      "domain": "research",
+      "path": "research/academic-research",
+      "checksum": "953e8f644b672f17",
+      "has_scripts": true,
+      "has_references": true,
+      "has_assets": false
+    },
+    "research": {
+      "domain": "research",
+      "path": "research/research",
+      "checksum": "3c465939e9befc8e",
+      "has_scripts": false,
+      "has_references": false,
+      "has_assets": false
+    },
+    "vault-knowledge-ops": {
+      "domain": "knowledge",
+      "path": "knowledge/vault-knowledge-ops",
+      "checksum": "742949177d9135ca",
+      "has_scripts": true,
+      "has_references": true,
+      "has_assets": false
+    },
+    "security-best-practices": {
+      "domain": "security",
+      "path": "security/security-best-practices",
+      "checksum": "7bd6c2cc8083d90f",
+      "has_scripts": false,
+      "has_references": true,
+      "has_assets": false
+    },
+    "security-ownership-map": {
+      "domain": "security",
+      "path": "security/security-ownership-map",
+      "checksum": "6eaca3bbadae6a91",
+      "has_scripts": true,
+      "has_references": true,
+      "has_assets": false
+    },
+    "security-threat-model": {
+      "domain": "security",
+      "path": "security/security-threat-model",
+      "checksum": "a262f87863756589",
+      "has_scripts": false,
+      "has_references": true,
+      "has_assets": false
+    },
+    "academic-paper": {
+      "domain": "unclassified",
+      "path": "unclassified/academic-paper",
+      "checksum": "d1f37a1b50fa3121",
+      "has_scripts": true,
+      "has_references": true,
+      "has_assets": false
+    },
+    "academic-review": {
+      "domain": "unclassified",
+      "path": "unclassified/academic-review",
+      "checksum": "1387945c6760d732",
+      "has_scripts": false,
+      "has_references": true,
+      "has_assets": false
+    },
+    "baoyu-comic-pipeline": {
+      "domain": "unclassified",
+      "path": "unclassified/baoyu-comic-pipeline",
+      "checksum": "37ff6b4a8eaaebfd",
+      "has_scripts": false,
+      "has_references": false,
+      "has_assets": false
+    },
+    "claude-projects-agents-bridge": {
+      "domain": "unclassified",
+      "path": "unclassified/claude-projects-agents-bridge",
+      "checksum": "671f31bf1ea2f43a",
+      "has_scripts": false,
+      "has_references": true,
+      "has_assets": false
+    },
+    "claude-projects-backlog-bridge": {
+      "domain": "unclassified",
+      "path": "unclassified/claude-projects-backlog-bridge",
+      "checksum": "a4ba34d718c14b88",
+      "has_scripts": false,
+      "has_references": true,
+      "has_assets": false
+    },
+    "claude-projects-code-review-bridge": {
+      "domain": "unclassified",
+      "path": "unclassified/claude-projects-code-review-bridge",
+      "checksum": "d906d9414d7a27f9",
+      "has_scripts": false,
+      "has_references": true,
+      "has_assets": false
+    },
+    "claude-projects-commands-bridge": {
+      "domain": "unclassified",
+      "path": "unclassified/claude-projects-commands-bridge",
+      "checksum": "839ed4009ddbb72e",
+      "has_scripts": false,
+      "has_references": true,
+      "has_assets": false
+    },
+    "claude-projects-hooks-bridge": {
+      "domain": "unclassified",
+      "path": "unclassified/claude-projects-hooks-bridge",
+      "checksum": "1f0f21ff19733ff8",
+      "has_scripts": false,
+      "has_references": true,
+      "has_assets": false
+    },
+    "claude-projects-local-bridge": {
+      "domain": "unclassified",
+      "path": "unclassified/claude-projects-local-bridge",
+      "checksum": "0d9ba3d0b21fb208",
+      "has_scripts": false,
+      "has_references": true,
+      "has_assets": false
+    },
+    "claude-projects-memory-bridge": {
+      "domain": "unclassified",
+      "path": "unclassified/claude-projects-memory-bridge",
+      "checksum": "07b83fde892dda64",
+      "has_scripts": false,
+      "has_references": true,
+      "has_assets": false
+    },
+    "claude-projects-n8n-bridge": {
+      "domain": "unclassified",
+      "path": "unclassified/claude-projects-n8n-bridge",
+      "checksum": "8f3a1621c55698f0",
+      "has_scripts": false,
+      "has_references": true,
+      "has_assets": false
+    },
+    "cli-dashboards": {
+      "domain": "unclassified",
+      "path": "unclassified/cli-dashboards",
+      "checksum": "5b06f63d68514c23",
+      "has_scripts": false,
+      "has_references": true,
+      "has_assets": false
+    },
+    "coding": {
+      "domain": "unclassified",
+      "path": "unclassified/coding",
+      "checksum": "db357f967e988a9b",
+      "has_scripts": false,
+      "has_references": false,
+      "has_assets": false
+    },
+    "cron-skill-review": {
+      "domain": "unclassified",
+      "path": "unclassified/cron-skill-review",
+      "checksum": "260fcd75e003b908",
+      "has_scripts": true,
+      "has_references": false,
+      "has_assets": false
+    },
+    "discord-swarm-ombudsman": {
+      "domain": "unclassified",
+      "path": "unclassified/discord-swarm-ombudsman",
+      "checksum": "0305eab6a28a1dd7",
+      "has_scripts": true,
+      "has_references": false,
+      "has_assets": false
+    },
+    "dmux-workflows": {
+      "domain": "unclassified",
+      "path": "unclassified/dmux-workflows",
+      "checksum": "89ad9af2380acb9c",
+      "has_scripts": false,
+      "has_references": false,
+      "has_assets": false
+    },
+    "doc": {
+      "domain": "unclassified",
+      "path": "unclassified/doc",
+      "checksum": "59344f423daf5370",
+      "has_scripts": true,
+      "has_references": false,
+      "has_assets": true
+    },
+    "docs": {
+      "domain": "unclassified",
+      "path": "unclassified/docs",
+      "checksum": "d7c466a0930b83a3",
+      "has_scripts": false,
+      "has_references": false,
+      "has_assets": false
+    },
+    "drafting": {
+      "domain": "unclassified",
+      "path": "unclassified/drafting",
+      "checksum": "f93686732864c01f",
+      "has_scripts": false,
+      "has_references": false,
+      "has_assets": false
+    },
+    "edgeless-guard": {
+      "domain": "unclassified",
+      "path": "unclassified/edgeless-guard",
+      "checksum": "bc965bad56a44ec2",
+      "has_scripts": false,
+      "has_references": true,
+      "has_assets": false
+    },
+    "email-intelligence-engineer": {
+      "domain": "unclassified",
+      "path": "unclassified/email-intelligence-engineer",
+      "checksum": "138ff61a5452e891",
+      "has_scripts": false,
+      "has_references": false,
+      "has_assets": false
+    },
+    "eval-harness": {
+      "domain": "unclassified",
+      "path": "unclassified/eval-harness",
+      "checksum": "5c26a750c17c02a2",
+      "has_scripts": false,
+      "has_references": true,
+      "has_assets": false
+    },
+    "gh-address-comments": {
+      "domain": "unclassified",
+      "path": "unclassified/gh-address-comments",
+      "checksum": "068d34fb59cb97a3",
+      "has_scripts": true,
+      "has_references": false,
+      "has_assets": true
+    },
+    "gh-fix-ci": {
+      "domain": "unclassified",
+      "path": "unclassified/gh-fix-ci",
+      "checksum": "02b4d97e4bd91e34",
+      "has_scripts": true,
+      "has_references": false,
+      "has_assets": true
+    },
+    "graphify": {
+      "domain": "unclassified",
+      "path": "unclassified/graphify",
+      "checksum": "b479eaea72caf86d",
+      "has_scripts": false,
+      "has_references": false,
+      "has_assets": false
+    },
+    "incident-response-commander": {
+      "domain": "unclassified",
+      "path": "unclassified/incident-response-commander",
+      "checksum": "7308d03d5543dd38",
+      "has_scripts": false,
+      "has_references": false,
+      "has_assets": false
+    },
+    "infrastructure-maintainer": {
+      "domain": "unclassified",
+      "path": "unclassified/infrastructure-maintainer",
+      "checksum": "347faf5725e3aa8a",
+      "has_scripts": false,
+      "has_references": false,
+      "has_assets": false
+    },
+    "ios-build-troubleshooting": {
+      "domain": "unclassified",
+      "path": "unclassified/ios-build-troubleshooting",
+      "checksum": "a59dc4bf64e3ca95",
+      "has_scripts": false,
+      "has_references": true,
+      "has_assets": false
+    },
+    "kb-curation": {
+      "domain": "unclassified",
+      "path": "unclassified/kb-curation",
+      "checksum": "1c5d4ee0f0213325",
+      "has_scripts": false,
+      "has_references": false,
+      "has_assets": false
+    },
+    "monitoring": {
+      "domain": "unclassified",
+      "path": "unclassified/monitoring",
+      "checksum": "68da2a992af161b7",
+      "has_scripts": false,
+      "has_references": false,
+      "has_assets": false
+    },
+    "openai-docs": {
+      "domain": "unclassified",
+      "path": "unclassified/openai-docs",
+      "checksum": "1038046dc3b73f12",
+      "has_scripts": false,
+      "has_references": true,
+      "has_assets": true
+    },
+    "ops-alert": {
+      "domain": "unclassified",
+      "path": "unclassified/ops-alert",
+      "checksum": "bb09706cd4ac2723",
+      "has_scripts": false,
+      "has_references": false,
+      "has_assets": false
+    },
+    "paperclip-fleet-analyzer": {
+      "domain": "unclassified",
+      "path": "unclassified/paperclip-fleet-analyzer",
+      "checksum": "2a76dc25855f2f0a",
+      "has_scripts": true,
+      "has_references": true,
+      "has_assets": false
+    },
+    "pdf": {
+      "domain": "unclassified",
+      "path": "unclassified/pdf",
+      "checksum": "41091d91154e6f71",
+      "has_scripts": false,
+      "has_references": false,
+      "has_assets": true
+    },
+    "planning": {
+      "domain": "unclassified",
+      "path": "unclassified/planning",
+      "checksum": "f27cbb8a463f6d61",
+      "has_scripts": false,
+      "has_references": false,
+      "has_assets": false
+    },
+    "playwright": {
+      "domain": "unclassified",
+      "path": "unclassified/playwright",
+      "checksum": "f383a72a4329dd6f",
+      "has_scripts": true,
+      "has_references": true,
+      "has_assets": true
+    },
+    "playwright-interactive": {
+      "domain": "unclassified",
+      "path": "unclassified/playwright-interactive",
+      "checksum": "2921b7acbafb46ad",
+      "has_scripts": false,
+      "has_references": false,
+      "has_assets": true
+    },
+    "proof-of-completion": {
+      "domain": "unclassified",
+      "path": "unclassified/proof-of-completion",
+      "checksum": "147cd535234f7013",
+      "has_scripts": false,
+      "has_references": false,
+      "has_assets": false
+    },
+    "recall": {
+      "domain": "unclassified",
+      "path": "unclassified/recall",
+      "checksum": "2a5acf71bcd5730d",
+      "has_scripts": false,
+      "has_references": false,
+      "has_assets": false
+    },
+    "review": {
+      "domain": "unclassified",
+      "path": "unclassified/review",
+      "checksum": "566ea65693f1a5c3",
+      "has_scripts": false,
+      "has_references": false,
+      "has_assets": false
+    },
+    "scrapping": {
+      "domain": "unclassified",
+      "path": "unclassified/scrapping",
+      "checksum": "a9996592130e97c3",
+      "has_scripts": true,
+      "has_references": true,
+      "has_assets": false
+    },
+    "screenshot": {
+      "domain": "unclassified",
+      "path": "unclassified/screenshot",
+      "checksum": "59bd54a88ecfb293",
+      "has_scripts": true,
+      "has_references": false,
+      "has_assets": true
+    },
+    "sentry": {
+      "domain": "unclassified",
+      "path": "unclassified/sentry",
+      "checksum": "7b61e1d9f064034a",
+      "has_scripts": true,
+      "has_references": false,
+      "has_assets": true
+    },
+    "signal-extraction-layer": {
+      "domain": "unclassified",
+      "path": "unclassified/signal-extraction-layer",
+      "checksum": "064ddfe2d4df7087",
+      "has_scripts": false,
+      "has_references": false,
+      "has_assets": false
+    },
+    "speech": {
+      "domain": "unclassified",
+      "path": "unclassified/speech",
+      "checksum": "bd5a49f8617ba76c",
+      "has_scripts": true,
+      "has_references": true,
+      "has_assets": true
+    },
+    "touchdesigner-generative-art": {
+      "domain": "unclassified",
+      "path": "unclassified/touchdesigner-generative-art",
+      "checksum": "d2c715adf907eb5e",
+      "has_scripts": true,
+      "has_references": true,
+      "has_assets": false
+    },
+    "transcribe": {
+      "domain": "unclassified",
+      "path": "unclassified/transcribe",
+      "checksum": "839dda5a44fba733",
+      "has_scripts": true,
+      "has_references": true,
+      "has_assets": true
+    },
+    "triage": {
+      "domain": "unclassified",
+      "path": "unclassified/triage",
+      "checksum": "8658735929c0859c",
+      "has_scripts": false,
+      "has_references": false,
+      "has_assets": false
+    },
+    "verify-before-claiming": {
+      "domain": "unclassified",
+      "path": "unclassified/verify-before-claiming",
+      "checksum": "41d429b8f37af326",
+      "has_scripts": false,
+      "has_references": true,
+      "has_assets": false
+    },
+    "youtube-summarizer": {
+      "domain": "unclassified",
+      "path": "unclassified/youtube-summarizer",
+      "checksum": "2496805a3e8159b4",
+      "has_scripts": false,
+      "has_references": true,
+      "has_assets": false
+    }
+  }
+}

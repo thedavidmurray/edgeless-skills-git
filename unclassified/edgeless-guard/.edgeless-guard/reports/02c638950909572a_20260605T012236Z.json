@@ -1,0 +1,9 @@
+{
+  "run_id": "02c638950909572a",
+  "profile": "hipaa",
+  "guard_mode": "block",
+  "target": "{\"test\":\"injection\"}",
+  "blocked": false,
+  "violations": [],
+  "details": {}
+}

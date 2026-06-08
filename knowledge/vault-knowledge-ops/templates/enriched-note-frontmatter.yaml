@@ -1,0 +1,130 @@
+# Multi-Track Enriched Note Template
+# Place this in your note template system (Obsidian, vault, etc.)
+
+---
+title: "{{title}}"
+source: {{source}}  # youtube, rss, podcast, article
+url: {{url}}
+channel: {{channel}}
+published: {{published_date}}
+processed: {{processed_date}}
+kb_score: {{kb_score}}
+
+# Enrichment metadata
+enrichment_tier: {{enrichment_tier}}  # 0=raw, 1=basic, 2=synthesized, 3=deep
+
+# Multi-tag track classification
+track_tags: {{track_tags}}
+# Options: knowledge, tool_workflow, people, trading_intel, creative_seeds, code_patterns, opportunity
+
+# Universal enrichment fields (REQUIRED for Tier-3)
+context: |
+  {{context}}
+one_liner: "{{one_liner}}"
+vault_connections: {{vault_connections}}
+---
+
+# Summary
+
+{{summary}}
+
+# Notes
+
+{{notes}}
+
+---
+
+# Track-Specific Payloads
+# Only populate sections for tracks in track_tags
+
+{{#if tool_workflow}}
+## Tool/Workflow Analysis
+
+```yaml
+tool_workflow:
+  - name: {{tool_name}}
+    context: "{{tool_context}}"
+    install_status: queued  # queued, testing, installed, rejected
+    edgeless_guide: planned  # planned, drafted, published
+    guide_path: "{{guide_path}}"
+    tested: false
+    recommended: {{tool_recommended}}  # boolean
+```
+{{/if}}
+
+{{#if people}}
+## People/Network
+
+```yaml
+people:
+  - name: {{person_name}}
+    context: "{{person_context}}"
+    relevance: {{person_relevance}}
+    connection_type: {{connection_type}}  # follow, collaborate, invite, debate
+    notes: {{person_notes}}
+```
+{{/if}}
+
+{{#if trading_intel}}
+## Trading Intelligence
+
+```yaml
+trading_patterns:
+  - topic: {{trading_topic}}
+    market: {{market}}
+    signal_type: {{signal_type}}  # momentum, reversal, macro, technical
+    confidence: {{trading_confidence}}  # 0.0-1.0
+    pamela_action: {{pamela_action}}  # analyze, track, trade, ignore
+```
+{{/if}}
+
+{{#if creative_seeds}}
+## Creative Seeds
+
+```yaml
+creative_techniques:
+  - technique: {{technique_name}}
+    tool: {{creative_tool}}
+    project_ref: {{project_ref}}
+    tested: false
+    specimen_score: {{specimen_score}}  # Critic evaluation score
+```
+{{/if}}
+
+{{#if code_patterns}}
+## Code Patterns
+
+```yaml
+code_snippets:
+  - language: {{code_lang}}
+    snippet: |
+      {{code_snippet}}
+    pattern_type: {{pattern_type}}  # algorithm, data-structure, architecture, utility
+    skill_candidate: {{skill_candidate}}  # boolean - worth adding to skill library?
+    verified: false
+```
+{{/if}}
+
+{{#if opportunity}}
+## Opportunity Pipeline
+
+```yaml
+business_ideas:
+  - concept: {{opportunity_concept}}
+    market_gap: {{market_gap}}
+    validation_status: unvalidated  # unvalidated, researching, prototyping, validated
+    builder_assigned: {{builder_assigned}}
+    priority: {{opportunity_priority}}  # low, medium, high
+```
+{{/if}}
+
+---
+
+# ChromaDB Clustering
+
+```yaml
+clusters: {{clusters}}  # Semantic cluster assignments
+semantic_neighbors: {{neighbors}}  # Top-5 similar notes
+embedding_version: {{embedding_version}}
+last_clustered: {{last_clustered}}
+```

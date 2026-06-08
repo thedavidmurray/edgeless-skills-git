@@ -1,0 +1,93 @@
+//@version=5
+strategy("Factor Rotation - Automated", 
+     overlay=true, 
+     initial_capital=100000,
+     default_qty_type=strategy.percent_of_equity,
+     default_qty_value=10,
+     commission_type=strategy.commission.percent,
+     commission_value=0.0,
+     pyramiding=0)
+
+// === INPUTS ===
+growth_symbol = input.symbol("QQQ", "Growth ETF")
+value_symbol = input.symbol("VTV", "Value ETF")
+size_symbol = input.symbol("IWM", "Small Cap ETF")
+quality_symbol = input.symbol("QUAL", "Quality ETF")
+spx_symbol = input.symbol("SPY", "Market Benchmark")
+
+rebalance_threshold = input.float(5.0, "Rebalance Threshold %", minval=1.0, maxval=20.0)
+max_allocation = input.float(40.0, "Max Single Factor %", minval=10.0, maxval=50.0)
+
+// === DATA FETCHING ===
+growth_close = request.security(growth_symbol, timeframe.period, close)
+value_close = request.security(value_symbol, timeframe.period, close)
+size_close = request.security(size_symbol, timeframe.period, close)
+quality_close = request.security(quality_symbol, timeframe.period, close)
+spx_close = request.security(spx_symbol, timeframe.period, close)
+
+// === REGIME DETECTION ===
+growth_value_ratio = growth_close / value_close
+gv_sma20 = ta.sma(growth_value_ratio, 20)
+gv_sma50 = ta.sma(growth_value_ratio, 50)
+
+size_momentum = size_close / spx_close
+size_sma20 = ta.sma(size_momentum, 20)
+
+quality_spread = quality_close / spx_close
+quality_sma20 = ta.sma(quality_spread, 20)
+
+// === MONTHLY REBALANCE TRIGGER ===
+new_month = month != month[1]
+
+// === SIGNAL GENERATION ===
+in_growth_regime = growth_value_ratio > gv_sma20 and growth_value_ratio > gv_sma50
+in_value_regime = growth_value_ratio < gv_sma20 and growth_value_ratio < gv_sma50
+in_smallcap_regime = size_momentum > size_sma20
+in_quality_regime = quality_spread > quality_sma20
+
+// === WEBHOOK ALERTS (AUTOMATED) ===
+alert_message_growth = '{"strategy": "factor_rotation", "action": "rotate_growth", "symbol": "QQQ", "allocation": 0.35, "regime": "growth", "confidence": 0.75, "timestamp": "' + str.tostring(timenow) + '"}'
+
+alert_message_value = '{"strategy": "factor_rotation", "action": "rotate_value", "symbol": "VTV", "allocation": 0.35, "regime": "value", "confidence": 0.75, "timestamp": "' + str.tostring(timenow) + '"}'
+
+alert_message_smallcap = '{"strategy": "factor_rotation", "action": "add_smallcap", "symbol": "IWM", "allocation": 0.15, "regime": "small_cap", "confidence": 0.70, "timestamp": "' + str.tostring(timenow) + '"}'
+
+alert_message_quality = '{"strategy": "factor_rotation", "action": "add_quality", "symbol": "QUAL", "allocation": 0.15, "regime": "quality", "confidence": 0.70, "timestamp": "' + str.tostring(timenow) + '"}'
+
+// === AUTOMATED STRATEGY EXECUTION ===
+if new_month
+    strategy.close_all(comment="Monthly Rebalance")
+    
+    if in_growth_regime
+        strategy.entry("Growth", strategy.long, qty=strategy.equity * 0.35 / growth_close, comment="Growth Rotation")
+        alert(alert_message_growth, alert.freq_once_per_bar)
+    else if in_value_regime
+        strategy.entry("Value", strategy.long, qty=strategy.equity * 0.35 / value_close, comment="Value Rotation")
+        alert(alert_message_value, alert.freq_once_per_bar)
+    
+    if in_smallcap_regime
+        strategy.entry("SmallCap", strategy.long, qty=strategy.equity * 0.15 / size_close, comment="Small Cap Tilt")
+        alert(alert_message_smallcap, alert.freq_once_per_bar)
+    
+    if in_quality_regime
+        strategy.entry("Quality", strategy.long, qty=strategy.equity * 0.15 / quality_close, comment="Quality Tilt")
+        alert(alert_message_quality, alert.freq_once_per_bar)
+
+// === PLOT INDICATORS ===
+plot(in_growth_regime ? 1 : 0, "Growth Regime", color=color.green, style=plot.style_histogram)
+plot(in_value_regime ? 1 : 0, "Value Regime", color=color.red, style=plot.style_histogram)
+
+// === INFO PANEL ===
+var table info_table = table.new(position.top_right, 2, 5, bgcolor=color.new(color.black, 80))
+
+if barstate.islast
+    table.cell(info_table, 0, 0, "Regime", text_color=color.white, text_size=size.small)
+    table.cell(info_table, 1, 0, in_growth_regime ? "GROWTH" : in_value_regime ? "VALUE" : "NEUTRAL", 
+               text_color=in_growth_regime ? color.green : in_value_regime ? color.red : color.gray, text_size=size.small)
+    
+    table.cell(info_table, 0, 1, "GV Ratio", text_color=color.white, text_size=size.small)
+    table.cell(info_table, 1, 1, str.tostring(growth_value_ratio, "#.###"), text_color=color.white, text_size=size.small)
+    
+    table.cell(info_table, 0, 2, "Next Rebalance", text_color=color.white, text_size=size.small)
+    table.cell(info_table, 1, 2, new_month ? "TODAY" : str.tostring(month + 1) + "/1", 
+               text_color=new_month ? color.orange : color.white, text_size=size.small)

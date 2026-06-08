@@ -1,0 +1,64 @@
+name: sox
+version: 1.1.0
+framework: SOX
+description: Sarbanes-Oxley IT general controls and change management guardrails for financial agent workflows.
+
+guard:
+  mode: block
+  redact_fields:
+    - revenue
+    - net_income
+    - eps
+  max_output_bytes: 4096
+
+rules:
+  - id: sox_destructive_ddl
+    type: pattern
+    category: data_integrity
+    severity: critical
+    match: |
+      \b(DROP\s+TABLE|TRUNCATE\s+TABLE)\b
+    message: "Destructive DDL blocked by SOX change-management rule."
+    suggestion: "Use approved migration pipeline with CAB review."
+    remediation_steps:
+      - "Open change-management ticket"
+      - "Obtain CAB approval"
+      - "Schedule change window"
+  - id: sox_bulk_data_mutation
+    type: pattern
+    category: data_integrity
+    severity: critical
+    match: |
+      \bUPDATE\b.+?\bSET\b.+?\bWHERE\b
+    message: "Bulk update detected without immutable audit trail."
+    suggestion: "Restrict to parameterized, logged, and immutable transaction."
+  - id: sox_unauthorized_report_modification
+    type: pattern
+    category: reporting
+    severity: high
+    match: |
+      [Rr]evenue|[Nn]et [Ii]ncome|EPS|10-[KkQ]
+    message: "Financial figure published without edit and approval control."
+    suggestion: "Route through CFO review queue before publication."
+  - id: sox_segment_override
+    type: pattern
+    category: access_control
+    severity: high
+    match: |
+      sudo|chmod\s+777|chown\s+\w+\s+root|umask\s+0
+    message: "Privileged access or permission override detected."
+    suggestion: "Restrict privileged commands to break-glass runbooks."
+  - id: sox_data_backup_bypass
+    type: pattern
+    category: backup
+    severity: high
+    match: |
+      \b(truncate|purge|delete\s+from)\b.*\b(logs|audit|backup)\b
+    message: "Potential destruction of logs or backups blocked by SOX."
+    suggestion: "Pause and consult compliance team before any log deletion."
+
+tags:
+  - finance
+  - audit
+  - sox
+  - financial-reporting

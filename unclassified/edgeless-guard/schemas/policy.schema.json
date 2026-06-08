@@ -1,0 +1,12 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Guard policy",
+  "type": "object",
+  "required": ["id"],
+  "properties": {
+    "id": {"type": "string"},
+    "policy_domains": {"type": "array", "items": {"type": "string"}},
+    "target": {"type": "string"},
+    "meta": {"type": "object"}
+  }
+}

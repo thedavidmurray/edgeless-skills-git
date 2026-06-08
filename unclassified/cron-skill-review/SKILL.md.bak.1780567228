@@ -1,0 +1,374 @@
+---
+name: cron-skill-review
+description: Automated nightly pipeline that analyzes agent activities, detects skill gaps from error patterns and backlog analysis, posts digests to Discord, and creates Paperclip tracking issues for skill establishment.
+version: 1.0.0
+author: Hermes
+metadata:
+  hermes:
+    tags: [paperclip, automation, cron, skills, monitoring, backlog]
+
+---
+
+# Nightly Skill Review Pipeline
+
+Systematic analysis of Paperclip agent fleet activities to identify skill gaps, track tool usage patterns, and auto-generate skill establishment work items.
+
+## When to Use
+
+- Setting up continuous skill improvement for agent fleets
+- Detecting when agents struggle with missing tools/capabilities
+- Automating backlog analysis for infrastructure gaps
+- Creating accountability loops between activity and capability
+
+## Prerequisites
+
+```bash
+# Required environment
+PAPERCLIP_URL="http://127.0.0.1:3100"
+COMPANY_ID="your-company-uuid"
+DISCORD_WEBHOOK_AUDIT="https://discord.com/api/webhooks/..."  # for digests
+```
+
+## Quick Start
+
+### 1. Create the Script
+
+Copy `~/.hermes/scripts/nightly-skill-review.py` (see full implementation below).
+
+### 2. Schedule the Cron
+
+```python
+from cronjob import cronjob_action
+cronjob_action('create', name='nightly-skill-review',
+    script='nightly-skill-review.py',  # relative path required
+    schedule='0 2 * * *',  # 2 AM daily
+    prompt='Run nightly skill review analysis'
+)
+```
+
+### 3. Manual Trigger
+
+```bash
+cd ~ && python3 ~/.hermes/scripts/nightly-skill-review.py
+```
+
+## Core Detection Logic
+
+### Error Pattern Analysis
+
+Scans agent run results for skill/tool failure signatures:
+
+```python
+error_patterns = Counter()
+
+for run in recent_runs:
+    error = run.get('error', '').lower()
+    
+    if 'not found' in error or 'no such file' in error:
+        error_patterns['missing_tool/skill'] += 1
+    if 'api' in error and 'key' in error:
+        error_patterns['api_auth_failure'] += 1
+    if 'timeout' in error:
+        error_patterns['timeout_network'] += 1
+    if 'parse' in error or 'json' in error:
+        error_patterns['parsing_failure'] += 1
+
+# Threshold: 3+ errors triggers skill recommendation
+if error_patterns['missing_tool/skill'] >= 3:
+    recommend_skill('tool-discovery-bridge', priority='high')
+```
+
+### Backlog Skill Gap Detection
+
+Analyzes unassigned backlog items for capability needs:
+
+```python
+keyword_map = {
+    ('mcp', 'api', 'integration', 'webhook'): 'mcp_builder',
+    ('pine', 'tradingview', 'backtest'): 'trading_automation',
+    ('youtube', 'transcript', 'summarize'): 'youtube_pipeline',
+    ('plotter', 'art', 'generative', 'svg'): 'generative_art',
+    ('chroma', 'vector', 'embedding', 'rag'): 'vector_db',
+    ('discord', 'telegram', 'notify'): 'messaging',
+}
+
+# Count matches per theme
+theme_counts = Counter()
+for issue in backlog:
+    text = (issue.get('title', '') + ' ' + issue.get('description', '')).lower()
+    for keywords, theme in keyword_map.items():
+        if any(k in text for k in keywords):
+            theme_counts[theme] += 1
+
+# Recommend skill if 2+ matching items
+for theme, count in theme_counts.items():
+    if count >= 2:
+        recommend_skill(f"{theme}-automation", priority='medium')
+```
+
+### Skill Diversity Monitoring
+
+Flags agents using <2 distinct skills despite active work:
+
+```python
+low_diversity = []
+for agent in agents:
+    skills_used = detect_skills_from_runs(agent_runs[agent['id']])
+    if len(skills_used) < 2 and agent['status'] == 'running':
+        low_diversity.append({
+            'name': agent['name'],
+            'skills_count': len(skills_used),
+            'recommendation': 'cross-skill-training'
+        })
+```
+
+## Outputs
+
+### 1. Discord Digest (to #audit-log)
+
+```
+📊 Nightly Skill Review — 2026-04-17
+
+Activity Summary
+• 14 agents checked
+• 47 recent runs analyzed
+• 3 agents with low skill diversity
+
+Skill Needs Detected
+mcp_builder: 3 items
+trading_automation: 2 items
+vector_db: 1 items
+
+Error Patterns
+missing_tool/skill: 0
+timeout_network: 2
+api_auth_failure: 1
+
+🔧 Skill Establishment Recommendations
+HIGH — mcp-server-scaffold
+3 backlog items need MCP integrations
+
+MEDIUM — tradingview-pine-automation  
+2 trading tasks pending automation
+```
+
+### 2. Paperclip Issues (Auto-Created)
+
+For HIGH priority recommendations, creates ticket assigned to Builder:
+
+```yaml
+Title: "Establish Skill: mcp-server-scaffold"
+Priority: high
+Status: todo
+Assignee: Builder
+Description: |
+  **Auto-generated from nightly skill review**
+  
+  3 backlog items need MCP integrations:
+  - Issue A: EDGA-XXX
+  - Issue B: EDGA-XXX
+  
+  **Recommended approach:**
+  1. Check skills hub for existing solutions
+  2. Scaffold new skill if gap confirmed
+  3. Test with 2-3 backlog tasks
+  4. Document and register
+```
+
+## Implementation Template
+
+```python
+#!/usr/bin/env python3
+"""
+Nightly Skill Review & Establishment Pipeline
+Place in ~/.hermes/scripts/nightly-skill-review.py
+"""
+
+import json
+import subprocess
+from datetime import datetime, timedelta
+from collections import Counter, defaultdict
+
+# CONFIG
+PAPERCLIP_URL = "http://127.0.0.1:3100"
+COMPANY_ID = "your-company-uuid"
+DISCORD_WEBHOOK = "your-audit-log-webhook"
+
+def api_get(path):
+    """Fetch from Paperclip HTTP API (no auth for localhost)"""
+    import urllib.request
+    url = f"{PAPERCLIP_URL}/api/{path}"
+    with urllib.request.urlopen(url, timeout=10) as resp:
+        return json.loads(resp.read().decode())
+
+def post_discord(content, embeds=None):
+    """Post to Discord via curl (avoids SSL issues in cron)"""
+    payload = {
+        "username": "Skill-Reviewer",
+        "content": content,
+        "embeds": embeds or []
+    }
+    subprocess.run([
+        'curl', '-s', '-X', 'POST', DISCORD_WEBHOOK,
+        '-H', 'Content-Type: application/json',
+        '-d', json.dumps(payload)
+    ], timeout=30)
+
+def create_issue(title, description, priority="medium", assignee=None):
+    """Create Paperclip issue via HTTP API"""
+    import urllib.request
+    payload = {
+        "title": title,
+        "description": description,
+        "priority": priority,
+        "status": "todo",
+        "companyId": COMPANY_ID
+    }
+    if assignee:
+        payload["assigneeAgentId"] = assignee
+    
+    url = f"{PAPERCLIP_URL}/api/companies/{COMPANY_ID}/issues"
+    req = urllib.request.Request(
+        url, data=json.dumps(payload).encode(),
+        headers={"Content-Type": "application/json"}
+    )
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        return json.loads(resp.read().decode())
+
+def analyze_agents():
+    """Fetch and analyze agent fleet"""
+    agents = api_get(f"companies/{COMPANY_ID}/agents")
+    recent_runs = []
+    
+    for agent in agents:
+        try:
+            runs = api_get(f"companies/{COMPANY_ID}/agents/{agent['id']}/runs")
+            recent_runs.extend(runs[-5:])
+        except:
+            pass
+    
+    return agents, recent_runs
+
+def detect_skill_gaps(agents, recent_runs, backlog):
+    """Analyze for skill establishment needs"""
+    recommendations = []
+    
+    # 1. Error pattern analysis
+    error_counts = Counter()
+    for run in recent_runs:
+        error = run.get('error', '').lower()
+        if 'not found' in error:
+            error_counts['missing_tool'] += 1
+    
+    if error_counts['missing_tool'] >= 3:
+        recommendations.append({
+            'skill': 'tool-discovery-bridge',
+            'reason': f"{error_counts['missing_tool']} 'not found' errors",
+            'priority': 'high'
+        })
+    
+    # 2. Backlog theme analysis
+    theme_counts = Counter()
+    keywords_to_themes = {
+        ('mcp', 'integration'): 'mcp-automation',
+        ('youtube', 'transcript'): 'youtube-pipeline',
+        ('trading', 'pine'): 'trading-automation',
+    }
+    
+    for issue in backlog:
+        text = (issue.get('title', '') + ' ' + str(issue.get('description', ''))).lower()
+        for keywords, theme in keywords_to_themes.items():
+            if any(k in text for k in keywords):
+                theme_counts[theme] += 1
+    
+    for theme, count in theme_counts.items():
+        if count >= 2:
+            recommendations.append({
+                'skill': theme,
+                'reason': f"{count} backlog items need {theme}",
+                'priority': 'medium'
+            })
+    
+    return recommendations
+
+def main():
+    now = datetime.now()
+    agents, recent_runs = analyze_agents()
+    issues = api_get(f"companies/{COMPANY_ID}/issues")
+    backlog = [i for i in issues if i.get('status') in ['backlog', 'todo']]
+    
+    # Detect gaps
+    recommendations = detect_skill_gaps(agents, recent_runs, backlog)
+    
+    # Build Discord digest
+    embeds = [{
+        "title": f"📊 Skill Review — {now.strftime('%Y-%m-%d')}",
+        "description": f"Analyzed {len(agents)} agents, {len(recent_runs)} runs",
+        "fields": [
+            {"name": "Skill Needs", "value": str(len(recommendations)), "inline": True},
+            {"name": "Backlog", "value": str(len(backlog)), "inline": True}
+        ],
+        "color": 5763719
+    }]
+    
+    if recommendations:
+        recs_text = '\n'.join([f"{r['priority'].upper()}: {r['skill']}" for r in recommendations[:3]])
+        embeds.append({
+            "title": "🔧 Recommendations",
+            "description": recs_text,
+            "color": 15548997 if any(r['priority'] == 'high' for r in recommendations) else 3447003
+        })
+    
+    post_discord("🌙 Nightly Skill Review Complete", embeds)
+    
+    # Create Paperclip issues for HIGH priority
+    builder = next((a for a in agents if a['name'] == 'Builder'), None)
+    for rec in recommendations:
+        if rec['priority'] == 'high':
+            create_issue(
+                f"Establish Skill: {rec['skill']}",
+                f"**Auto-generated skill gap**\n\n{rec['reason']}\n\n**Next steps:**\n1. Search skills hub\n2. Scaffold if needed\n3. Test with 2-3 tasks",
+                priority='high',
+                assignee=builder['id'] if builder else None
+            )
+    
+    # Log completion
+    with open('/tmp/nightly-skill-review.log', 'a') as f:
+        f.write(f"{now.isoformat()}: {len(recommendations)} recommendations\n")
+
+if __name__ == '__main__':
+    main()
+```
+
+## Common Pitfalls
+
+### SSL in Cron Contexts
+
+**Problem:** `urllib.request` fails with `CERTIFICATE_VERIFY_FAILED` in cron.
+
+**Solution:** Always use `curl` subprocess for Discord webhooks in cron scripts.
+
+### Paperclip API 404 on PATCH
+
+Updating issue assignments via API PATCH often returns 404. The script creates new issues instead of updating existing ones to avoid this limitation.
+
+### Relative Script Paths
+
+Cron `script` parameter must be relative to `~/.hermes/scripts/`. Absolute paths (even `~/.hermes/scripts/file.py`) are rejected.
+
+### Agent Run Fetching
+
+Some agents may have no runs or fail to return run history. Wrap in try/except to avoid script failure.
+
+## Extension Points
+
+- **Custom theme keywords:** Extend `keyword_map` for your domain-specific tools
+- **Slack integration:** Add `post_slack()` function alongside Discord
+- **Metrics export:** Emit Prometheus/StatsD metrics for dashboard visibility
+- **Skill scoring:** Add complexity estimation to prioritize high-impact skills
+
+## Related Skills
+
+- `paperclip-api` — HTTP API patterns for agent/issue management
+- `fastmcp` — For building skills that the pipeline detects as gaps
+- `discord` — Bot-based Discord integration (alternative to webhooks)
