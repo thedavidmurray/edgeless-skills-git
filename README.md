@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Edgeless Skills Repository
 
 Git-backed skills system for the Edgeless swarm. Follows the [GitHub Agent Skills](https://agentskills.io) specification.
@@ -61,7 +60,3 @@ python scripts/skills/skill_install.py --source https://github.com/user/repo --s
 # Auto-commit any pending skill changes
 python scripts/skills/session_auto_commit.py
 ```
-=======
-# edgeless-skills-git
-Git-backed skills system for Edgeless multi-agent swarm (agentskills.io format)
->>>>>>> c8e7049ad7302783915f368e84d3eb170398ad08

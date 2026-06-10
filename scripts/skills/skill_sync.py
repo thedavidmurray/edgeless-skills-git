@@ -213,6 +213,10 @@ def main() -> int:
     sources = list(DEFAULT_SOURCES)
     if args.source:
         sources.extend(args.source)
+    existing_sources = [source for source in sources if source.exists()]
+    if not existing_sources:
+        print("No source directories exist; nothing to sync.")
+        return 0
 
     # Ensure git repo
     git_dir = repo_dir / ".git"
@@ -222,7 +226,7 @@ def main() -> int:
         run_git(["git", "config", "user.email", "edgeless@localhost"], cwd=repo_dir)
         run_git(["git", "config", "user.name", "Edgeless Swarm"], cwd=repo_dir)
 
-    synced = sync_skills(repo_dir, sources)
+    synced = sync_skills(repo_dir, existing_sources)
     manifest = generate_manifest(repo_dir)
     manifest_path = repo_dir / "manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")

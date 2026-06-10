@@ -1,9 +1,6 @@
 name: Sync Skills
 
 on:
-  schedule:
-    # Run every 6 hours
-    - cron: '0 */6 * * *'
   workflow_dispatch:
 
 jobs:
@@ -23,9 +20,6 @@ jobs:
       - name: Sync skills
         run: |
           python scripts/skills/skill_sync.py --commit --message "scheduled sync"
-        env:
-          GIT_AUTHOR_NAME: Edgeless Swarm
-          GIT_AUTHOR_EMAIL: edgeless@localhost
 
       - name: Push changes
         if: github.ref == 'refs/heads/main'
